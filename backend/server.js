@@ -6,6 +6,7 @@ const db = require('./config/database');
 const authRoutes = require('./routes/auth');
 const cryptoRoutes = require('./routes/crypto');
 const tradingRoutes = require('./routes/trading');
+const currencyRoutes = require('./routes/currency');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -23,6 +24,7 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/crypto', cryptoRoutes);
 app.use('/api/trading', tradingRoutes);
+app.use('/api/currency', currencyRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

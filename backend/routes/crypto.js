@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { getTopCryptos, getCryptoPrice, searchCrypto } = require('../services/cryptoAPI');
+const { getTopCryptos, getCryptoPrice, getCryptoPriceMultiCurrency, searchCrypto } = require('../services/cryptoAPI');
 const { authenticateToken } = require('../middleware/auth');
 
 // Get top cryptocurrencies by market cap
 router.get('/top', authenticateToken, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
-    const cryptos = await getTopCryptos(limit);
+    const currency = req.query.currency || 'usd';
+    const cryptos = await getTopCryptos(limit, currency);
     res.json({ success: true, data: cryptos });
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -18,7 +19,8 @@ router.get('/top', authenticateToken, async (req, res) => {
 router.get('/price/:coinId', authenticateToken, async (req, res) => {
   try {
     const { coinId } = req.params;
-    const priceData = await getCryptoPrice(coinId);
+    const currency = req.query.currency || 'usd';
+    const priceData = await getCryptoPrice(coinId, currency);
     res.json({ success: true, data: priceData });
   } catch (error) {
     res.status(500).json({ error: error.message });
