@@ -7,8 +7,11 @@ import {
   buyCrypto,
   sellCrypto,
   topUpBalance,
-  getCryptoPrice,
+  getAllBalances,
 } from '../services/api';
+import CurrencySelector from '../components/CurrencySelector';
+import MultiCurrencyBalances from '../components/MultiCurrencyBalances';
+import CurrencyExchange from '../components/CurrencyExchange';
 import './Dashboard.css';
 
 function Dashboard({ onLogout }) {
@@ -17,11 +20,15 @@ function Dashboard({ onLogout }) {
   const [portfolio, setPortfolio] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [stats, setStats] = useState(null);
+  const [balances, setBalances] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('market');
   const [selectedCrypto, setSelectedCrypto] = useState(null);
   const [tradeAmount, setTradeAmount] = useState('');
   const [topUpAmount, setTopUpAmount] = useState('');
+  const [topUpCurrency, setTopUpCurrency] = useState('usd');
+  const [tradeCurrency, setTradeCurrency] = useState('usd');
+  const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -33,17 +40,19 @@ function Dashboard({ onLogout }) {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [cryptosRes, portfolioRes, statsRes, historyRes] = await Promise.all([
+      const [cryptosRes, portfolioRes, statsRes, historyRes, balancesRes] = await Promise.all([
         getTopCryptos(50),
         getPortfolio(),
         getStats(),
         getTransactionHistory(20),
+        getAllBalances(),
       ]);
 
       setCryptos(cryptosRes.data.data);
       setPortfolio(portfolioRes.data.portfolio);
       setStats(statsRes.data.stats);
       setTransactions(historyRes.data.transactions);
+      setBalances(balancesRes.data.balances || []);
     } catch (error) {
       console.error('Error loading data:', error);
       showMessage('Error loading data', 'error');
@@ -65,7 +74,7 @@ function Dashboard({ onLogout }) {
     }
 
     try {
-      const response = await topUpBalance(amount);
+      const response = await topUpBalance(amount, topUpCurrency);
       showMessage(response.data.message);
       setTopUpAmount('');
       loadData();
@@ -91,7 +100,8 @@ function Dashboard({ onLogout }) {
         selectedCrypto.id,
         selectedCrypto.symbol,
         selectedCrypto.name,
-        amount
+        amount,
+        tradeCurrency
       );
       showMessage(response.data.message);
       setTradeAmount('');
@@ -116,7 +126,7 @@ function Dashboard({ onLogout }) {
     }
 
     try {
-      const response = await sellCrypto(holding.coin_id, holding.symbol, amount);
+      const response = await sellCrypto(holding.coin_id, holding.symbol, amount, holding.currency || 'usd');
       showMessage(response.data.message);
       loadData();
     } catch (error) {
@@ -159,41 +169,38 @@ function Dashboard({ onLogout }) {
         </div>
       )}
 
-      <div className="stats-grid">
-        <div className="stat-card">
-          <h3>Cash Balance</h3>
-          <p className="stat-value">{formatCurrency(stats?.cash_balance || 0)}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Crypto Value</h3>
-          <p className="stat-value">{formatCurrency(stats?.crypto_value || 0)}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Total Value</h3>
-          <p className="stat-value">{formatCurrency(stats?.total_value || 0)}</p>
-        </div>
-        <div className="stat-card">
-          <h3>Profit/Loss</h3>
-          <p className={`stat-value ${(stats?.profit_loss || 0) >= 0 ? 'positive' : 'negative'}`}>
-            {formatCurrency(stats?.profit_loss || 0)}
-            {stats?.profit_loss_percent !== undefined && (
-              <span className="percentage"> ({stats.profit_loss_percent.toFixed(2)}%)</span>
-            )}
-          </p>
-        </div>
-      </div>
+      <MultiCurrencyBalances balances={balances} stats={stats} />
 
-      <div className="top-up-section">
-        <input
-          type="number"
-          placeholder="Amount to add"
-          value={topUpAmount}
-          onChange={(e) => setTopUpAmount(e.target.value)}
-          className="input-field"
-        />
-        <button onClick={handleTopUp} className="btn-primary">
-          Top Up Balance
-        </button>
+      <div className="actions-section" style={{ marginTop: '20px', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
+        <div className="top-up-section" style={{ flex: '1', minWidth: '300px' }}>
+          <h3>Top Up Balance</h3>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
+            <div style={{ flex: '1' }}>
+              <CurrencySelector value={topUpCurrency} onChange={setTopUpCurrency} label="Currency" />
+            </div>
+            <input
+              type="number"
+              placeholder="Amount to add"
+              value={topUpAmount}
+              onChange={(e) => setTopUpAmount(e.target.value)}
+              className="input-field"
+              style={{ flex: '1' }}
+            />
+            <button onClick={handleTopUp} className="btn-primary">
+              Top Up
+            </button>
+          </div>
+        </div>
+
+        <div className="exchange-section" style={{ flex: '0', minWidth: '200px', display: 'flex', alignItems: 'flex-end' }}>
+          <button
+            onClick={() => setShowExchangeModal(true)}
+            className="btn-primary"
+            style={{ width: '100%', padding: '12px 24px' }}
+          >
+            💱 Currency Exchange (Forex)
+          </button>
+        </div>
       </div>
 
       <div className="tabs">
@@ -226,9 +233,14 @@ function Dashboard({ onLogout }) {
                 <h3>Buy {selectedCrypto.name} ({selectedCrypto.symbol})</h3>
                 <p>Current Price: {formatCurrency(selectedCrypto.current_price)}</p>
                 <div className="trade-form">
+                  <CurrencySelector
+                    value={tradeCurrency}
+                    onChange={setTradeCurrency}
+                    label="Pay with"
+                  />
                   <input
                     type="number"
-                    placeholder="Amount"
+                    placeholder="Amount of crypto"
                     value={tradeAmount}
                     onChange={(e) => setTradeAmount(e.target.value)}
                     className="input-field"
@@ -372,6 +384,16 @@ function Dashboard({ onLogout }) {
           </div>
         )}
       </div>
+
+      {showExchangeModal && (
+        <CurrencyExchange
+          onExchangeComplete={(data) => {
+            showMessage(data.message || 'Currency exchanged successfully!');
+            loadData();
+          }}
+          onClose={() => setShowExchangeModal(false)}
+        />
+      )}
     </div>
   );
 }
