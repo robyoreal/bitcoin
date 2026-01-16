@@ -31,21 +31,29 @@ router.post('/register', async (req, res) => {
         }
 
         const token = generateToken(this.lastID, username);
+        const userId = this.lastID;
+
+        // Initialize multi-currency balance (USD)
+        db.run(
+          'INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)',
+          [userId, 'usd', initialBalance]
+        );
 
         // Log deposit transaction
         db.run(
-          'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-          [this.lastID, 'USD', 'usd', 'US Dollar', 'deposit', initialBalance, 1, initialBalance]
+          'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+          [userId, 'USD', 'usd', 'US Dollar', 'deposit', initialBalance, 1, initialBalance, 'usd']
         );
 
         res.status(201).json({
           message: 'User registered successfully',
           token,
           user: {
-            id: this.lastID,
+            id: userId,
             username,
             email,
-            balance: initialBalance
+            balance: initialBalance,
+            preferred_currency: 'usd'
           }
         });
       }

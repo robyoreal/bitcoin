@@ -23,33 +23,55 @@ export const login = (username, password) =>
   api.post('/auth/login', { username, password });
 
 // Crypto
-export const getTopCryptos = (limit = 50) =>
-  api.get('/crypto/top', { params: { limit } });
+export const getTopCryptos = (limit = 50, currency = 'usd') =>
+  api.get('/crypto/top', { params: { limit, currency } });
 
-export const getCryptoPrice = (coinId) =>
-  api.get(`/crypto/price/${coinId}`);
+export const getCryptoPrice = (coinId, currency = 'usd') =>
+  api.get(`/crypto/price/${coinId}`, { params: { currency } });
 
 export const searchCrypto = (query) =>
   api.get('/crypto/search', { params: { q: query } });
 
-// Trading
-export const getBalance = () =>
-  api.get('/trading/balance');
+// Currency
+export const getSupportedCurrencies = () =>
+  api.get('/currency/supported');
 
-export const topUpBalance = (amount) =>
-  api.post('/trading/topup', { amount });
+export const getExchangeRates = (baseCurrency = 'usd') =>
+  api.get('/currency/rates', { params: { base: baseCurrency } });
 
-export const buyCrypto = (coinId, symbol, name, amount) =>
-  api.post('/trading/buy', { coinId, symbol, name, amount });
+export const getAllBalances = () =>
+  api.get('/currency/balances');
 
-export const sellCrypto = (coinId, symbol, amount) =>
-  api.post('/trading/sell', { coinId, symbol, amount });
+export const exchangeCurrency = (fromCurrency, toCurrency, amount) =>
+  api.post('/currency/exchange', { fromCurrency, toCurrency, amount });
 
-export const getPortfolio = () =>
-  api.get('/trading/portfolio');
+export const depositCurrency = (currency, amount) =>
+  api.post('/currency/deposit', { currency, amount });
 
-export const getTransactionHistory = (limit = 50, offset = 0) =>
-  api.get('/trading/history', { params: { limit, offset } });
+export const setPreferredCurrency = (currency) =>
+  api.post('/currency/preference', { currency });
+
+export const getPreferredCurrency = () =>
+  api.get('/currency/preference');
+
+// Trading (updated for multi-currency)
+export const getBalance = (currency = 'usd') =>
+  api.get('/trading/balance', { params: { currency } });
+
+export const topUpBalance = (amount, currency = 'usd') =>
+  api.post('/trading/topup', { amount, currency });
+
+export const buyCrypto = (coinId, symbol, name, amount, currency = 'usd') =>
+  api.post('/trading/buy', { coinId, symbol, name, amount, currency });
+
+export const sellCrypto = (coinId, symbol, amount, currency = 'usd') =>
+  api.post('/trading/sell', { coinId, symbol, amount, currency });
+
+export const getPortfolio = (currency = null) =>
+  api.get('/trading/portfolio', currency ? { params: { currency } } : {});
+
+export const getTransactionHistory = (limit = 50, offset = 0, currency = null) =>
+  api.get('/trading/history', { params: { limit, offset, ...(currency && { currency }) } });
 
 export const getStats = () =>
   api.get('/trading/stats');
