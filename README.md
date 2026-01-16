@@ -6,20 +6,30 @@ A lightweight web application for practicing cryptocurrency trading without fina
 
 - **User Management**: Register/login with JWT authentication
 - **Real-time Crypto Prices**: Live price data from CoinGecko API for 50+ cryptocurrencies
+- **Multi-Currency Support**: Trade in 20+ currencies (USD, EUR, GBP, JPY, etc.)
+- **Forex Trading**: Exchange between fiat currencies
 - **Paper Trading**: Buy and sell crypto with virtual money
 - **Portfolio Management**: Track your holdings and performance
 - **Transaction History**: View all your trading activity
 - **Balance Top-up**: Add virtual funds to your account
 - **Statistics Dashboard**: Monitor your profit/loss and portfolio value
+- **Enhanced Caching**: Configurable caching (Memory, Redis, File-based) to reduce API calls
+- **Multi-Database Support**: Choose between SQLite, PostgreSQL, or MySQL
+
+## 📚 Documentation
+
+- **[Multi-Currency Feature Guide](MULTICURRENCY_FEATURE.md)** - Comprehensive guide to using multiple currencies and forex trading
+- **[Caching & Database Configuration](CACHING_AND_DATABASES.md)** - Set up caching strategies and choose your database
 
 ## Tech Stack
 
 ### Backend
 - **Node.js** + **Express**: REST API server
-- **SQLite**: Lightweight database
+- **Database Options**: SQLite (default), PostgreSQL, MySQL
 - **JWT**: Secure authentication
 - **bcryptjs**: Password hashing
 - **Axios**: HTTP client for CoinGecko API
+- **Cache Options**: Memory (default), Redis, File-based
 
 ### Frontend
 - **React**: UI framework
@@ -253,22 +263,74 @@ npm run dev:all    # Run both backend and frontend
 
 ## Configuration
 
+### Basic Configuration
+
+The `.env` file contains all configuration options. See `.env.example` for a complete list.
+
 ### Change Initial Balance
-Edit `.env`:
 ```env
 INITIAL_BALANCE=50000  # Give users $50,000 instead of $10,000
 ```
 
 ### Change Server Port
-Edit `.env`:
 ```env
 PORT=5000  # Run backend on port 5000
 ```
 
-### Use Different Database
-Edit `.env`:
+### Database Configuration
+
+**SQLite (Default)**
 ```env
-DB_PATH=/path/to/custom/database.db
+DB_TYPE=sqlite
+DB_PATH=./crypto_trading.db
+```
+
+**PostgreSQL**
+```env
+DB_TYPE=postgresql
+DB_HOST=localhost
+DB_PORT=5432
+DB_NAME=crypto_trading
+DB_USER=postgres
+DB_PASSWORD=yourpassword
+```
+
+**MySQL**
+```env
+DB_TYPE=mysql
+DB_HOST=localhost
+DB_PORT=3306
+DB_NAME=crypto_trading
+DB_USER=root
+DB_PASSWORD=yourpassword
+```
+
+See [CACHING_AND_DATABASES.md](CACHING_AND_DATABASES.md) for detailed setup instructions.
+
+### Cache Configuration
+
+**Memory Cache (Default)**
+```env
+CACHE_STRATEGY=memory
+```
+
+**Redis Cache**
+```env
+CACHE_STRATEGY=redis
+REDIS_URL=redis://localhost:6379
+```
+
+**File-based Cache**
+```env
+CACHE_STRATEGY=file
+```
+
+**Cache TTL Settings**
+```env
+CACHE_CRYPTO_PRICES_TTL=60        # Crypto prices (seconds)
+CACHE_EXCHANGE_RATES_TTL=300      # Exchange rates (seconds)
+CACHE_TOP_CRYPTOS_TTL=120         # Top cryptos list (seconds)
+CACHE_SEARCH_TTL=600              # Search results (seconds)
 ```
 
 ## Rate Limits
@@ -311,13 +373,15 @@ CoinGecko free tier limits:
 
 Potential features to add:
 - Price alerts and notifications
-- Historical price charts
+- Historical price charts with candlesticks
 - Advanced order types (limit orders, stop-loss)
 - Leaderboard for top traders
 - Social features (follow other traders)
 - Mobile app version
-- More detailed analytics
+- More detailed analytics and reporting
 - Import/export portfolio data
+- Real-time WebSocket price updates
+- Advanced portfolio analytics and insights
 
 ## License
 
