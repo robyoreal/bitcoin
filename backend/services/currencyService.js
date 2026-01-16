@@ -1,4 +1,7 @@
 const axios = require('axios');
+const { getCacheInstance } = require('./cacheService');
+
+const cache = getCacheInstance();
 
 // Supported currencies with their details
 const SUPPORTED_CURRENCIES = {
@@ -24,10 +27,6 @@ const SUPPORTED_CURRENCIES = {
   nok: { name: 'Norwegian Krone', symbol: 'kr', code: 'NOK' }
 };
 
-// Cache for exchange rates
-const exchangeRateCache = new Map();
-const CACHE_DURATION = 300000; // 5 minutes
-
 /**
  * Get list of all supported currencies
  */
@@ -51,10 +50,11 @@ function isCurrencySupported(currency) {
  */
 async function getExchangeRates(baseCurrency = 'usd') {
   const cacheKey = `rates_${baseCurrency}`;
-  const cached = exchangeRateCache.get(cacheKey);
 
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.data;
+  // Check cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   try {
@@ -83,7 +83,8 @@ async function getExchangeRates(baseCurrency = 'usd') {
       timestamp: new Date().toISOString()
     };
 
-    exchangeRateCache.set(cacheKey, { data, timestamp: Date.now() });
+    // Cache the result
+    await cache.set(cacheKey, data, cache.defaultTTL.exchangeRates);
     return data;
   } catch (error) {
     console.error('Error fetching exchange rates:', error.message);

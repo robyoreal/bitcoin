@@ -1,13 +1,19 @@
 const axios = require('axios');
+const { getCacheInstance } = require('./cacheService');
 
 const COINGECKO_API = 'https://api.coingecko.com/api/v3';
-
-// Cache for price data (to avoid hitting rate limits)
-const priceCache = new Map();
-const CACHE_DURATION = 60000; // 1 minute
+const cache = getCacheInstance();
 
 // Get list of top cryptocurrencies
 async function getTopCryptos(limit = 50, currency = 'usd') {
+  const cacheKey = `top_cryptos_${limit}_${currency}`;
+
+  // Check cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   try {
     const response = await axios.get(`${COINGECKO_API}/coins/markets`, {
       params: {
@@ -19,7 +25,7 @@ async function getTopCryptos(limit = 50, currency = 'usd') {
       }
     });
 
-    return response.data.map(coin => ({
+    const data = response.data.map(coin => ({
       id: coin.id,
       symbol: coin.symbol.toUpperCase(),
       name: coin.name,
@@ -29,6 +35,10 @@ async function getTopCryptos(limit = 50, currency = 'usd') {
       image: coin.image,
       currency: currency.toLowerCase()
     }));
+
+    // Cache the result
+    await cache.set(cacheKey, data, cache.defaultTTL.topCryptos);
+    return data;
   } catch (error) {
     console.error('Error fetching top cryptos:', error.message);
     throw new Error('Failed to fetch cryptocurrency data');
@@ -38,10 +48,11 @@ async function getTopCryptos(limit = 50, currency = 'usd') {
 // Get current price for specific crypto
 async function getCryptoPrice(coinId, currency = 'usd') {
   const cacheKey = `price_${coinId}_${currency}`;
-  const cached = priceCache.get(cacheKey);
 
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.data;
+  // Check cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   try {
@@ -60,7 +71,8 @@ async function getCryptoPrice(coinId, currency = 'usd') {
       currency: currencyLower
     };
 
-    priceCache.set(cacheKey, { data, timestamp: Date.now() });
+    // Cache the result
+    await cache.set(cacheKey, data, cache.defaultTTL.cryptoPrices);
     return data;
   } catch (error) {
     console.error('Error fetching crypto price:', error.message);
@@ -72,10 +84,11 @@ async function getCryptoPrice(coinId, currency = 'usd') {
 async function getCryptoPriceMultiCurrency(coinId, currencies = ['usd', 'eur', 'gbp']) {
   const currencyString = Array.isArray(currencies) ? currencies.join(',') : currencies;
   const cacheKey = `price_multi_${coinId}_${currencyString}`;
-  const cached = priceCache.get(cacheKey);
 
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.data;
+  // Check cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    return cached;
   }
 
   try {
@@ -88,7 +101,9 @@ async function getCryptoPriceMultiCurrency(coinId, currencies = ['usd', 'eur', '
     });
 
     const data = response.data[coinId];
-    priceCache.set(cacheKey, { data, timestamp: Date.now() });
+
+    // Cache the result
+    await cache.set(cacheKey, data, cache.defaultTTL.cryptoPrices);
     return data;
   } catch (error) {
     console.error('Error fetching crypto prices:', error.message);
@@ -98,17 +113,29 @@ async function getCryptoPriceMultiCurrency(coinId, currencies = ['usd', 'eur', '
 
 // Search for cryptocurrencies
 async function searchCrypto(query) {
+  const cacheKey = `search_${query.toLowerCase()}`;
+
+  // Check cache first
+  const cached = await cache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
   try {
     const response = await axios.get(`${COINGECKO_API}/search`, {
       params: { query }
     });
 
-    return response.data.coins.slice(0, 10).map(coin => ({
+    const data = response.data.coins.slice(0, 10).map(coin => ({
       id: coin.id,
       symbol: coin.symbol.toUpperCase(),
       name: coin.name,
       thumb: coin.thumb
     }));
+
+    // Cache the result
+    await cache.set(cacheKey, data, cache.defaultTTL.searchResults);
+    return data;
   } catch (error) {
     console.error('Error searching crypto:', error.message);
     throw new Error('Failed to search cryptocurrencies');
