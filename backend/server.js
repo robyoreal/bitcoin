@@ -33,10 +33,18 @@ app.use((err, req, res, next) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`\n🚀 Crypto Paper Trading API Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`💰 Initial balance: $${process.env.INITIAL_BALANCE || 10000}\n`);
-});
+// Initialize database and start server
+db.initialize()
+  .then(() => {
+    app.listen(PORT, () => {
+      console.log(`\n🚀 Crypto Paper Trading API Server running on port ${PORT}`);
+      console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`💰 Initial balance: $${process.env.INITIAL_BALANCE || 10000}\n`);
+    });
+  })
+  .catch(err => {
+    console.error('Failed to initialize database:', err);
+    process.exit(1);
+  });
 
 module.exports = app;

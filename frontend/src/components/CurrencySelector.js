@@ -30,7 +30,7 @@ function CurrencySelector({ value, onChange, label = "Currency" }) {
       {label && <label>{label}:</label>}
       <select value={value} onChange={(e) => onChange(e.target.value)} className="currency-select">
         {currencies.map((currency) => (
-          <option key={currency.id} value={currency.id}>
+          <option key={currency.code} value={currency.code.toLowerCase()}>
             {currency.symbol} {currency.code} - {currency.name}
           </option>
         ))}

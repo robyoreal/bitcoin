@@ -25,8 +25,14 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
 
   useEffect(() => {
     if (exchangeRate && amount) {
-      const targetCurrencyRate = exchangeRate.rates[toCurrency];
-      setConvertedAmount(parseFloat(amount) * targetCurrencyRate);
+      // Get the rate for target currency
+      const rate = exchangeRate.rates[toCurrency.toLowerCase()];
+      if (rate) {
+        setConvertedAmount(parseFloat(amount) * rate);
+      } else {
+        console.error('Rate not found for:', toCurrency);
+        setConvertedAmount(0);
+      }
     } else {
       setConvertedAmount(0);
     }
@@ -36,9 +42,11 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
     try {
       const response = await getAllBalances();
       const balanceMap = {};
-      response.data.balances.forEach(b => {
-        balanceMap[b.currency] = b.amount;
-      });
+      if (response.data.balances) {
+        response.data.balances.forEach(b => {
+          balanceMap[b.currency.toLowerCase()] = b.amount;
+        });
+      }
       setBalances(balanceMap);
     } catch (error) {
       console.error('Error loading balances:', error);
@@ -48,6 +56,7 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
   const loadExchangeRate = async () => {
     try {
       const response = await getExchangeRates(fromCurrency);
+      console.log('Exchange rate response:', response.data);
       setExchangeRate(response.data);
     } catch (error) {
       console.error('Error loading exchange rate:', error);
@@ -61,7 +70,7 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
       return;
     }
 
-    const availableBalance = balances[fromCurrency] || 0;
+    const availableBalance = balances[fromCurrency.toLowerCase()] || 0;
     if (parseFloat(amount) > availableBalance) {
       setError(`Insufficient ${fromCurrency.toUpperCase()} balance`);
       return;
@@ -90,6 +99,11 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
     setToCurrency(temp);
   };
 
+  const getRate = () => {
+    if (!exchangeRate || !exchangeRate.rates) return null;
+    return exchangeRate.rates[toCurrency.toLowerCase()];
+  };
+
   return (
     <div className="currency-exchange-modal">
       <div className="exchange-content">
@@ -108,7 +122,7 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
                 label=""
               />
               <div className="balance-info">
-                Available: {(balances[fromCurrency] || 0).toFixed(2)} {fromCurrency.toUpperCase()}
+                Available: {(balances[fromCurrency.toLowerCase()] || 0).toFixed(2)} {fromCurrency.toUpperCase()}
               </div>
             </div>
 
@@ -124,7 +138,7 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
                 label=""
               />
               <div className="balance-info">
-                Balance: {(balances[toCurrency] || 0).toFixed(2)} {toCurrency.toUpperCase()}
+                Balance: {(balances[toCurrency.toLowerCase()] || 0).toFixed(2)} {toCurrency.toUpperCase()}
               </div>
             </div>
           </div>
@@ -141,11 +155,11 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
             />
           </div>
 
-          {exchangeRate && amount > 0 && (
+          {exchangeRate && amount > 0 && getRate() && (
             <div className="exchange-preview">
               <div className="rate-info">
                 <span>Exchange Rate:</span>
-                <strong>1 {fromCurrency.toUpperCase()} = {exchangeRate.rates[toCurrency]?.toFixed(4)} {toCurrency.toUpperCase()}</strong>
+                <strong>1 {fromCurrency.toUpperCase()} = {getRate()?.toFixed(6)} {toCurrency.toUpperCase()}</strong>
               </div>
               <div className="converted-amount">
                 <span>You will receive:</span>

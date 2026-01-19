@@ -51,34 +51,41 @@ router.post('/topup', authenticateToken, (req, res) => {
     return res.status(400).json({ error: 'Currency not supported' });
   }
 
-  db.serialize(() => {
-    // Add to multi-currency balance
-    db.run(
-      `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
-       ON CONFLICT(user_id, currency) DO UPDATE SET amount = amount + ?`,
-      [req.user.userId, currency.toLowerCase(), amount, amount]
-    );
-
-    // Log deposit transaction
-    db.run(
-      'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [req.user.userId, currency.toUpperCase(), currency.toLowerCase(), `${currency.toUpperCase()} Deposit`, 'deposit', amount, 1, amount, currency.toLowerCase()],
-      function (err) {
-        if (err) {
-          return res.status(500).json({ error: 'Transaction logging failed' });
-        }
-
-        getBalanceInCurrency(req.user.userId, currency, (err, newBalance) => {
-          res.json({
-            success: true,
-            message: `Added ${amount} ${currency.toUpperCase()} to your balance`,
-            new_balance: newBalance,
-            currency: currency.toLowerCase()
-          });
-        });
+  // Add to multi-currency balance (MySQL syntax)
+  db.run(
+    `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
+     ON DUPLICATE KEY UPDATE amount = amount + ?`,
+    [req.user.userId, currency.toLowerCase(), amount, amount],
+    function (err) {
+      if (err) {
+        return res.status(500).json({ error: 'Balance update failed' });
       }
-    );
-  });
+
+      // Log deposit transaction
+      db.run(
+        'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [req.user.userId, currency.toUpperCase(), currency.toLowerCase(), `${currency.toUpperCase()} Deposit`, 'deposit', amount, 1, amount, currency.toLowerCase()],
+        function (err) {
+          if (err) {
+            return res.status(500).json({ error: 'Transaction logging failed' });
+          }
+
+          getBalanceInCurrency(req.user.userId, currency, (err, newBalance) => {
+            if (err) {
+              return res.status(500).json({ error: 'Failed to get balance' });
+            }
+            
+            res.json({
+              success: true,
+              message: `Added ${amount} ${currency.toUpperCase()} to your balance`,
+              new_balance: newBalance,
+              currency: currency.toLowerCase()
+            });
+          });
+        }
+      );
+    }
+  );
 });
 
 // Buy cryptocurrency - now supports any currency
@@ -114,63 +121,83 @@ router.post('/buy', authenticateToken, async (req, res) => {
         });
       }
 
-      // Begin transaction
-      db.serialize(() => {
-        // Deduct balance
-        db.run(
-          `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
-           ON CONFLICT(user_id, currency) DO UPDATE SET amount = amount - ?`,
-          [req.user.userId, currency.toLowerCase(), -totalCost, totalCost]
-        );
-
-        // Update or create portfolio entry (now with currency)
-        db.get(
-          'SELECT * FROM portfolio WHERE user_id = ? AND symbol = ? AND currency = ?',
-          [req.user.userId, symbol.toUpperCase(), currency.toLowerCase()],
-          (err, holding) => {
-            if (holding) {
-              // Update existing holding
-              const newAmount = holding.amount + amount;
-              const newAvgPrice = ((holding.average_buy_price * holding.amount) + (currentPrice * amount)) / newAmount;
-
-              db.run(
-                'UPDATE portfolio SET amount = ?, average_buy_price = ? WHERE id = ?',
-                [newAmount, newAvgPrice, holding.id]
-              );
-            } else {
-              // Create new holding
-              db.run(
-                'INSERT INTO portfolio (user_id, symbol, coin_id, name, amount, average_buy_price, currency) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [req.user.userId, symbol.toUpperCase(), coinId, name, amount, currentPrice, currency.toLowerCase()]
-              );
-            }
+      // Deduct balance (MySQL syntax)
+      db.run(
+        `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
+         ON DUPLICATE KEY UPDATE amount = amount - ?`,
+        [req.user.userId, currency.toLowerCase(), -totalCost, totalCost],
+        function (err) {
+          if (err) {
+            return res.status(500).json({ error: 'Failed to deduct balance' });
           }
-        );
 
-        // Log transaction
-        db.run(
-          'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [req.user.userId, symbol.toUpperCase(), coinId, name, 'buy', amount, currentPrice, totalCost, currency.toLowerCase()],
-          function (err) {
-            if (err) {
-              return res.status(500).json({ error: 'Transaction logging failed' });
-            }
-
-            res.json({
-              success: true,
-              message: `Bought ${amount} ${symbol.toUpperCase()} for ${totalCost.toFixed(2)} ${currency.toUpperCase()}`,
-              transaction: {
-                type: 'buy',
-                symbol: symbol.toUpperCase(),
-                amount,
-                price: currentPrice,
-                total: totalCost,
-                currency: currency.toUpperCase()
+          // Update or create portfolio entry (now with currency)
+          db.get(
+            'SELECT * FROM portfolio WHERE user_id = ? AND symbol = ? AND currency = ?',
+            [req.user.userId, symbol.toUpperCase(), currency.toLowerCase()],
+            (err, holding) => {
+              if (err) {
+                return res.status(500).json({ error: 'Database error' });
               }
-            });
-          }
-        );
-      });
+
+              if (holding) {
+                // Update existing holding
+                const newAmount = holding.amount + amount;
+                const newAvgPrice = ((holding.average_buy_price * holding.amount) + (currentPrice * amount)) / newAmount;
+
+                db.run(
+                  'UPDATE portfolio SET amount = ?, average_buy_price = ? WHERE id = ?',
+                  [newAmount, newAvgPrice, holding.id],
+                  function (err) {
+                    if (err) {
+                      return res.status(500).json({ error: 'Failed to update portfolio' });
+                    }
+                    logBuyTransaction();
+                  }
+                );
+              } else {
+                // Create new holding
+                db.run(
+                  'INSERT INTO portfolio (user_id, symbol, coin_id, name, amount, average_buy_price, currency) VALUES (?, ?, ?, ?, ?, ?, ?)',
+                  [req.user.userId, symbol.toUpperCase(), coinId, name, amount, currentPrice, currency.toLowerCase()],
+                  function (err) {
+                    if (err) {
+                      return res.status(500).json({ error: 'Failed to create portfolio entry' });
+                    }
+                    logBuyTransaction();
+                  }
+                );
+              }
+
+              // Log transaction helper function
+              function logBuyTransaction() {
+                db.run(
+                  'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                  [req.user.userId, symbol.toUpperCase(), coinId, name, 'buy', amount, currentPrice, totalCost, currency.toLowerCase()],
+                  function (err) {
+                    if (err) {
+                      return res.status(500).json({ error: 'Transaction logging failed' });
+                    }
+
+                    res.json({
+                      success: true,
+                      message: `Bought ${amount} ${symbol.toUpperCase()} for ${totalCost.toFixed(2)} ${currency.toUpperCase()}`,
+                      transaction: {
+                        type: 'buy',
+                        symbol: symbol.toUpperCase(),
+                        amount,
+                        price: currentPrice,
+                        total: totalCost,
+                        currency: currency.toUpperCase()
+                      }
+                    });
+                  }
+                );
+              }
+            }
+          );
+        }
+      );
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to complete purchase: ' + error.message });
@@ -208,50 +235,66 @@ router.post('/sell', authenticateToken, async (req, res) => {
         const currentPrice = priceData.price;
         const totalValue = amount * currentPrice;
 
-        db.serialize(() => {
-          // Add to balance
-          db.run(
-            `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
-             ON CONFLICT(user_id, currency) DO UPDATE SET amount = amount + ?`,
-            [req.user.userId, currency.toLowerCase(), totalValue, totalValue]
-          );
+        // Add to balance (MySQL syntax)
+        db.run(
+          `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
+           ON DUPLICATE KEY UPDATE amount = amount + ?`,
+          [req.user.userId, currency.toLowerCase(), totalValue, totalValue],
+          function (err) {
+            if (err) {
+              return res.status(500).json({ error: 'Failed to update balance' });
+            }
 
-          // Update portfolio
-          const newAmount = holding.amount - amount;
-          if (newAmount > 0.00000001) {
-            db.run(
-              'UPDATE portfolio SET amount = ? WHERE id = ?',
-              [newAmount, holding.id]
-            );
-          } else {
-            // Remove holding if amount is negligible
-            db.run('DELETE FROM portfolio WHERE id = ?', [holding.id]);
-          }
-
-          // Log transaction
-          db.run(
-            'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-            [req.user.userId, symbol.toUpperCase(), coinId, holding.name, 'sell', amount, currentPrice, totalValue, currency.toLowerCase()],
-            function (err) {
-              if (err) {
-                return res.status(500).json({ error: 'Transaction logging failed' });
-              }
-
-              res.json({
-                success: true,
-                message: `Sold ${amount} ${symbol.toUpperCase()} for ${totalValue.toFixed(2)} ${currency.toUpperCase()}`,
-                transaction: {
-                  type: 'sell',
-                  symbol: symbol.toUpperCase(),
-                  amount,
-                  price: currentPrice,
-                  total: totalValue,
-                  currency: currency.toUpperCase()
+            // Update portfolio
+            const newAmount = holding.amount - amount;
+            if (newAmount > 0.00000001) {
+              db.run(
+                'UPDATE portfolio SET amount = ? WHERE id = ?',
+                [newAmount, holding.id],
+                function (err) {
+                  if (err) {
+                    return res.status(500).json({ error: 'Failed to update portfolio' });
+                  }
+                  logSellTransaction();
                 }
+              );
+            } else {
+              // Remove holding if amount is negligible
+              db.run('DELETE FROM portfolio WHERE id = ?', [holding.id], function (err) {
+                if (err) {
+                  return res.status(500).json({ error: 'Failed to remove portfolio entry' });
+                }
+                logSellTransaction();
               });
             }
-          );
-        });
+
+            // Log transaction helper function
+            function logSellTransaction() {
+              db.run(
+                'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                [req.user.userId, symbol.toUpperCase(), coinId, holding.name, 'sell', amount, currentPrice, totalValue, currency.toLowerCase()],
+                function (err) {
+                  if (err) {
+                    return res.status(500).json({ error: 'Transaction logging failed' });
+                  }
+
+                  res.json({
+                    success: true,
+                    message: `Sold ${amount} ${symbol.toUpperCase()} for ${totalValue.toFixed(2)} ${currency.toUpperCase()}`,
+                    transaction: {
+                      type: 'sell',
+                      symbol: symbol.toUpperCase(),
+                      amount,
+                      price: currentPrice,
+                      total: totalValue,
+                      currency: currency.toUpperCase()
+                    }
+                  });
+                }
+              );
+            }
+          }
+        );
       }
     );
   } catch (error) {
@@ -295,8 +338,9 @@ router.get('/history', authenticateToken, (req, res) => {
     params.push(currency.toLowerCase());
   }
 
-  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
-  params.push(limit, offset);
+  // MySQL doesn't support placeholders for LIMIT/OFFSET, so we add them to the query string
+  // The values are already validated as integers above
+  query += ` ORDER BY created_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
   db.all(query, params, (err, transactions) => {
     if (err) {

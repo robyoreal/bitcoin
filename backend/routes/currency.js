@@ -1,68 +1,111 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
-const {
-  getSupportedCurrencies,
-  getExchangeRates,
-  convertCurrency,
-  isCurrencySupported
+const axios = require('axios');
+const { 
+  getSupportedCurrencies, 
+  getCurrencyInfo, 
+  CURRENCY_INFO 
 } = require('../services/currencyService');
+const { authenticateToken } = require('../middleware/auth');
 
-// Get all supported currencies
-router.get('/supported', authenticateToken, (req, res) => {
+// Cache for exchange rates
+let ratesCache = {};
+let ratesCacheTime = {};
+const RATES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get currency exchange rates
+ * GET /api/currency/rates/:baseCurrency (optional)
+ * GET /api/currency/rates?base=usd (query param)
+ */
+router.get('/rates/:baseCurrency?', async (req, res) => {
   try {
-    const currencies = getSupportedCurrencies();
-    res.json({ success: true, currencies });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get exchange rates
-router.get('/rates', authenticateToken, async (req, res) => {
-  try {
-    const baseCurrency = req.query.base || 'usd';
-    const rates = await getExchangeRates(baseCurrency);
-    res.json({ success: true, ...rates });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Get all user balances (multi-currency)
-router.get('/balances', authenticateToken, (req, res) => {
-  db.all(
-    'SELECT currency, amount FROM balances WHERE user_id = ? AND amount > 0 ORDER BY amount DESC',
-    [req.user.userId],
-    (err, balances) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
-
-      // Also get the legacy balance from users table for backward compatibility
-      db.get('SELECT balance FROM users WHERE id = ?', [req.user.userId], (err, user) => {
-        if (err) {
-          return res.status(500).json({ error: 'Database error' });
-        }
-
-        const allBalances = balances || [];
-
-        // If user has legacy balance, include it as USD
-        if (user && user.balance > 0) {
-          const existingUsd = allBalances.find(b => b.currency === 'usd');
-          if (!existingUsd) {
-            allBalances.unshift({ currency: 'usd', amount: user.balance });
-          }
-        }
-
-        res.json({ success: true, balances: allBalances });
+    const baseCurrency = (req.params.baseCurrency || req.query.base || 'usd').toLowerCase();
+    const now = Date.now();
+    
+    console.log(`[Currency Rates] Fetching rates for base: ${baseCurrency}`);
+    
+    // Return cached rates if still valid
+    if (ratesCache[baseCurrency] && (now - (ratesCacheTime[baseCurrency] || 0)) < RATES_CACHE_DURATION) {
+      console.log(`[Currency Rates] Returning cached rates for ${baseCurrency}`);
+      return res.json({
+        success: true,
+        base: baseCurrency.toUpperCase(),
+        rates: ratesCache[baseCurrency],
+        cached: true
       });
     }
-  );
+
+    // Fetch fresh rates from CoinGecko
+    const currencies = getSupportedCurrencies().join(',');
+    console.log(`[Currency Rates] Fetching from CoinGecko for currencies: ${currencies}`);
+    
+    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+      params: {
+        ids: 'tether', // USDT as proxy for all currencies
+        vs_currencies: currencies
+      }
+    });
+
+    const usdRates = response.data.tether || {};
+    console.log(`[Currency Rates] Got rates from CoinGecko:`, Object.keys(usdRates));
+    
+    // Calculate rates relative to base currency
+    let rates = {};
+    const baseRate = usdRates[baseCurrency] || 1;
+    
+    if (!usdRates[baseCurrency]) {
+      console.warn(`[Currency Rates] Base currency ${baseCurrency} not found in rates, using 1`);
+    }
+    
+    Object.keys(usdRates).forEach(currency => {
+      // Rate from base to target = (usd to target) / (usd to base)
+      // Ensure keys are lowercase
+      rates[currency.toLowerCase()] = usdRates[currency] / baseRate;
+    });
+    
+    console.log(`[Currency Rates] Calculated rates relative to ${baseCurrency}:`, Object.keys(rates));
+    
+    // Cache the rates
+    ratesCache[baseCurrency] = rates;
+    ratesCacheTime[baseCurrency] = now;
+
+    res.json({
+      success: true,
+      base: baseCurrency.toUpperCase(),
+      rates,
+      cached: false
+    });
+  } catch (error) {
+    console.error('[Currency Rates] Error fetching rates:', error.message);
+    
+    const baseCurrency = (req.params.baseCurrency || req.query.base || 'usd').toLowerCase();
+    
+    // Return cached rates if available, even if expired
+    if (ratesCache[baseCurrency]) {
+      console.log(`[Currency Rates] Returning stale cached rates for ${baseCurrency}`);
+      return res.json({
+        success: true,
+        base: baseCurrency.toUpperCase(),
+        rates: ratesCache[baseCurrency],
+        cached: true,
+        stale: true
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to fetch currency rates' 
+    });
+  }
 });
 
-// Exchange currency (forex trading)
+/**
+ * Exchange currency (convert from one currency to another)
+ * POST /api/currency/exchange
+ * Body: { fromCurrency, toCurrency, amount }
+ */
 router.post('/exchange', authenticateToken, async (req, res) => {
   const { fromCurrency, toCurrency, amount } = req.body;
 
@@ -70,18 +113,34 @@ router.post('/exchange', authenticateToken, async (req, res) => {
     return res.status(400).json({ error: 'Invalid request parameters' });
   }
 
-  if (!isCurrencySupported(fromCurrency) || !isCurrencySupported(toCurrency)) {
-    return res.status(400).json({ error: 'Currency not supported' });
-  }
+  const fromCurr = fromCurrency.toLowerCase();
+  const toCurr = toCurrency.toLowerCase();
 
   try {
-    // Get conversion rate
-    const conversion = await convertCurrency(amount, fromCurrency, toCurrency);
+    // Get exchange rate
+    const currencies = getSupportedCurrencies().join(',');
+    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
+      params: {
+        ids: 'tether',
+        vs_currencies: currencies
+      }
+    });
+
+    const usdRates = response.data.tether || {};
+    const fromRate = usdRates[fromCurr];
+    const toRate = usdRates[toCurr];
+    
+    if (!fromRate || !toRate) {
+      return res.status(400).json({ error: 'Currency not supported' });
+    }
+
+    const exchangeRate = toRate / fromRate;
+    const convertedAmount = amount * exchangeRate;
 
     // Check if user has enough balance in source currency
     db.get(
       'SELECT amount FROM balances WHERE user_id = ? AND currency = ?',
-      [req.user.userId, fromCurrency.toLowerCase()],
+      [req.user.userId, fromCurr],
       (err, balance) => {
         if (err) {
           return res.status(500).json({ error: 'Database error' });
@@ -93,164 +152,189 @@ router.post('/exchange', authenticateToken, async (req, res) => {
             return res.status(500).json({ error: 'Database error' });
           }
 
-          let currentBalance = balance ? balance.amount : 0;
-
-          // For USD, also consider legacy balance
-          if (fromCurrency.toLowerCase() === 'usd' && user && user.balance > 0) {
-            currentBalance += user.balance;
+          let availableBalance = balance?.amount || 0;
+          if (fromCurr === 'usd') {
+            availableBalance += (user?.balance || 0);
           }
 
-          if (currentBalance < amount) {
-            return res.status(400).json({ error: 'Insufficient balance' });
+          if (availableBalance < amount) {
+            return res.status(400).json({
+              error: 'Insufficient balance',
+              required: amount,
+              available: availableBalance
+            });
           }
 
-          // Perform the exchange
-          db.serialize(() => {
-            // Deduct from source currency
-            db.run(
-              `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
-               ON CONFLICT(user_id, currency) DO UPDATE SET amount = amount - ?`,
-              [req.user.userId, fromCurrency.toLowerCase(), -amount, amount]
-            );
-
-            // Add to destination currency
-            db.run(
-              `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
-               ON CONFLICT(user_id, currency) DO UPDATE SET amount = amount + ?`,
-              [req.user.userId, toCurrency.toLowerCase(), conversion.amount, conversion.amount]
-            );
-
-            // Log transaction
-            db.run(
-              `INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency, from_currency, to_currency, exchange_rate)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-              [
-                req.user.userId,
-                'FOREX',
-                'forex',
-                'Currency Exchange',
-                'exchange',
-                amount,
-                conversion.rate,
-                conversion.amount,
-                fromCurrency.toLowerCase(),
-                fromCurrency.toLowerCase(),
-                toCurrency.toLowerCase(),
-                conversion.rate
-              ],
-              function (err) {
-                if (err) {
-                  return res.status(500).json({ error: 'Transaction logging failed' });
-                }
-
-                res.json({
-                  success: true,
-                  message: `Exchanged ${amount} ${fromCurrency.toUpperCase()} to ${conversion.amount.toFixed(2)} ${toCurrency.toUpperCase()}`,
-                  exchange: {
-                    from: {
-                      currency: fromCurrency.toUpperCase(),
-                      amount: amount
-                    },
-                    to: {
-                      currency: toCurrency.toUpperCase(),
-                      amount: conversion.amount
-                    },
-                    rate: conversion.rate
-                  }
-                });
+          // Deduct from source currency
+          db.run(
+            `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE amount = amount - ?`,
+            [req.user.userId, fromCurr, -amount, amount],
+            function (err) {
+              if (err) {
+                return res.status(500).json({ error: 'Failed to deduct balance' });
               }
-            );
-          });
+
+              // Add to target currency
+              db.run(
+                `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
+                 ON DUPLICATE KEY UPDATE amount = amount + ?`,
+                [req.user.userId, toCurr, convertedAmount, convertedAmount],
+                function (err) {
+                  if (err) {
+                    return res.status(500).json({ error: 'Failed to add balance' });
+                  }
+
+                  // Log the exchange transaction
+                  db.run(
+                    'INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+                    [
+                      req.user.userId,
+                      `${fromCurr.toUpperCase()}-${toCurr.toUpperCase()}`,
+                      'exchange',
+                      `Currency Exchange: ${fromCurr.toUpperCase()} to ${toCurr.toUpperCase()}`,
+                      'exchange',
+                      amount,
+                      exchangeRate,
+                      convertedAmount,
+                      toCurr
+                    ],
+                    function (err) {
+                      if (err) {
+                        console.error('Transaction logging failed:', err);
+                      }
+
+                      res.json({
+                        success: true,
+                        message: `Exchanged ${amount} ${fromCurr.toUpperCase()} to ${convertedAmount.toFixed(2)} ${toCurr.toUpperCase()}`,
+                        exchange: {
+                          from: fromCurr.toUpperCase(),
+                          to: toCurr.toUpperCase(),
+                          amount,
+                          rate: exchangeRate,
+                          converted: convertedAmount
+                        }
+                      });
+                    }
+                  );
+                }
+              );
+            }
+          );
         });
       }
     );
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('Exchange error:', error);
+    res.status(500).json({ error: 'Failed to complete exchange: ' + error.message });
   }
 });
 
-// Add funds to a specific currency
-router.post('/deposit', authenticateToken, (req, res) => {
-  const { currency, amount } = req.body;
-
-  if (!currency || !amount || amount <= 0) {
-    return res.status(400).json({ error: 'Invalid parameters' });
-  }
-
-  if (!isCurrencySupported(currency)) {
-    return res.status(400).json({ error: 'Currency not supported' });
-  }
-
-  db.serialize(() => {
-    // Add to balance
-    db.run(
-      `INSERT INTO balances (user_id, currency, amount) VALUES (?, ?, ?)
-       ON CONFLICT(user_id, currency) DO UPDATE SET amount = amount + ?`,
-      [req.user.userId, currency.toLowerCase(), amount, amount]
-    );
-
-    // Log transaction
-    db.run(
-      `INSERT INTO transactions (user_id, symbol, coin_id, name, type, amount, price, total, currency)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.userId, currency.toUpperCase(), currency.toLowerCase(), `${currency.toUpperCase()} Deposit`, 'deposit', amount, 1, amount, currency.toLowerCase()],
-      function (err) {
-        if (err) {
-          return res.status(500).json({ error: 'Transaction logging failed' });
-        }
-
-        res.json({
-          success: true,
-          message: `Deposited ${amount} ${currency.toUpperCase()}`,
-          currency: currency.toUpperCase(),
-          amount: amount
-        });
-      }
-    );
+/**
+ * Get list of all supported currencies
+ * GET /api/currency/supported
+ */
+router.get('/supported', (req, res) => {
+  const currencies = getSupportedCurrencies();
+  const currencyList = currencies.map(code => ({
+    code: code.toUpperCase(),
+    ...getCurrencyInfo(code)
+  }));
+  
+  res.json({
+    success: true,
+    currencies: currencyList
   });
 });
 
-// Set preferred display currency
-router.post('/preference', authenticateToken, (req, res) => {
-  const { currency } = req.body;
-
-  if (!currency || !isCurrencySupported(currency)) {
-    return res.status(400).json({ error: 'Invalid currency' });
-  }
-
-  db.run(
-    'UPDATE users SET preferred_currency = ? WHERE id = ?',
-    [currency.toLowerCase(), req.user.userId],
-    function (err) {
+/**
+ * Get user's balances in all currencies
+ * GET /api/currency/balances
+ */
+router.get('/balances', authenticateToken, (req, res) => {
+  // Get balances from balances table
+  db.all(
+    'SELECT currency, amount FROM balances WHERE user_id = ?',
+    [req.user.userId],
+    (err, balances) => {
       if (err) {
         return res.status(500).json({ error: 'Database error' });
       }
 
-      res.json({
-        success: true,
-        message: `Preferred currency set to ${currency.toUpperCase()}`,
-        currency: currency.toLowerCase()
+      // Also get legacy USD balance from users table
+      db.get('SELECT balance FROM users WHERE id = ?', [req.user.userId], (err, user) => {
+        if (err) {
+          return res.status(500).json({ error: 'Database error' });
+        }
+
+        // Compile all balances
+        const allBalances = {};
+        
+        // Add balances from balances table
+        balances.forEach(b => {
+          allBalances[b.currency] = b.amount;
+        });
+
+        // Add legacy USD balance if exists
+        if (user?.balance > 0) {
+          allBalances.usd = (allBalances.usd || 0) + user.balance;
+        }
+
+        // Format response with currency info
+        const formattedBalances = Object.entries(allBalances).map(([currency, amount]) => ({
+          currency: currency.toUpperCase(),
+          amount,
+          ...getCurrencyInfo(currency)
+        }));
+
+        res.json({
+          success: true,
+          balances: formattedBalances
+        });
       });
     }
   );
 });
 
-// Get user's preferred currency
-router.get('/preference', authenticateToken, (req, res) => {
-  db.get(
-    'SELECT preferred_currency FROM users WHERE id = ?',
-    [req.user.userId],
-    (err, row) => {
-      if (err) {
-        return res.status(500).json({ error: 'Database error' });
-      }
+/**
+ * Get list of all supported currencies (alias)
+ * GET /api/currency/list
+ */
+router.get('/list', (req, res) => {
+  const currencies = getSupportedCurrencies();
+  const currencyList = currencies.map(code => ({
+    code: code.toUpperCase(),
+    ...getCurrencyInfo(code)
+  }));
+  
+  res.json({
+    success: true,
+    currencies: currencyList
+  });
+});
 
-      res.json({
-        success: true,
-        preferred_currency: row?.preferred_currency || 'usd'
-      });
+/**
+ * Get information about a specific currency
+ * GET /api/currency/:code
+ */
+router.get('/:code', (req, res) => {
+  const { code } = req.params;
+  const info = getCurrencyInfo(code);
+  
+  if (!info) {
+    return res.status(404).json({
+      success: false,
+      error: 'Currency not supported'
+    });
+  }
+  
+  res.json({
+    success: true,
+    currency: {
+      code: code.toUpperCase(),
+      ...info
     }
-  );
+  });
 });
 
 module.exports = router;

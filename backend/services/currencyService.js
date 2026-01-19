@@ -1,176 +1,105 @@
-const axios = require('axios');
-const { getCacheInstance } = require('./cacheService');
+/**
+ * Currency Service
+ * Manages supported currencies for the trading platform
+ */
 
-const cache = getCacheInstance();
+// List of supported currencies
+// These must match CoinGecko's supported currencies
+const SUPPORTED_CURRENCIES = [
+  'usd',  // US Dollar
+  'eur',  // Euro
+  'gbp',  // British Pound
+  'jpy',  // Japanese Yen
+  'aud',  // Australian Dollar
+  'cad',  // Canadian Dollar
+  'chf',  // Swiss Franc
+  'cny',  // Chinese Yuan
+  'krw',  // South Korean Won
+  'idr',  // Indonesian Rupiah
+  'inr',  // Indian Rupee
+  'brl',  // Brazilian Real
+  'rub',  // Russian Ruble
+  'sgd',  // Singapore Dollar
+  'hkd',  // Hong Kong Dollar
+  'myr',  // Malaysian Ringgit
+  'thb',  // Thai Baht
+  'php',  // Philippine Peso
+  'vnd',  // Vietnamese Dong
+];
 
-// Supported currencies with their details
-const SUPPORTED_CURRENCIES = {
-  usd: { name: 'US Dollar', symbol: '$', code: 'USD' },
-  eur: { name: 'Euro', symbol: '€', code: 'EUR' },
-  gbp: { name: 'British Pound', symbol: '£', code: 'GBP' },
-  jpy: { name: 'Japanese Yen', symbol: '¥', code: 'JPY' },
-  aud: { name: 'Australian Dollar', symbol: 'A$', code: 'AUD' },
-  cad: { name: 'Canadian Dollar', symbol: 'C$', code: 'CAD' },
-  chf: { name: 'Swiss Franc', symbol: 'CHF', code: 'CHF' },
-  cny: { name: 'Chinese Yuan', symbol: '¥', code: 'CNY' },
-  inr: { name: 'Indian Rupee', symbol: '₹', code: 'INR' },
-  brl: { name: 'Brazilian Real', symbol: 'R$', code: 'BRL' },
-  krw: { name: 'South Korean Won', symbol: '₩', code: 'KRW' },
-  mxn: { name: 'Mexican Peso', symbol: 'MX$', code: 'MXN' },
-  rub: { name: 'Russian Ruble', symbol: '₽', code: 'RUB' },
-  zar: { name: 'South African Rand', symbol: 'R', code: 'ZAR' },
-  try: { name: 'Turkish Lira', symbol: '₺', code: 'TRY' },
-  sgd: { name: 'Singapore Dollar', symbol: 'S$', code: 'SGD' },
-  hkd: { name: 'Hong Kong Dollar', symbol: 'HK$', code: 'HKD' },
-  nzd: { name: 'New Zealand Dollar', symbol: 'NZ$', code: 'NZD' },
-  sek: { name: 'Swedish Krona', symbol: 'kr', code: 'SEK' },
-  nok: { name: 'Norwegian Krone', symbol: 'kr', code: 'NOK' }
+// Currency symbols and display names
+const CURRENCY_INFO = {
+  usd: { symbol: '$', name: 'US Dollar', decimals: 2 },
+  eur: { symbol: '€', name: 'Euro', decimals: 2 },
+  gbp: { symbol: '£', name: 'British Pound', decimals: 2 },
+  jpy: { symbol: '¥', name: 'Japanese Yen', decimals: 0 },
+  aud: { symbol: 'A$', name: 'Australian Dollar', decimals: 2 },
+  cad: { symbol: 'C$', name: 'Canadian Dollar', decimals: 2 },
+  chf: { symbol: 'Fr', name: 'Swiss Franc', decimals: 2 },
+  cny: { symbol: '¥', name: 'Chinese Yuan', decimals: 2 },
+  krw: { symbol: '₩', name: 'South Korean Won', decimals: 0 },
+  idr: { symbol: 'Rp', name: 'Indonesian Rupiah', decimals: 0 },
+  inr: { symbol: '₹', name: 'Indian Rupee', decimals: 2 },
+  brl: { symbol: 'R$', name: 'Brazilian Real', decimals: 2 },
+  rub: { symbol: '₽', name: 'Russian Ruble', decimals: 2 },
+  sgd: { symbol: 'S$', name: 'Singapore Dollar', decimals: 2 },
+  hkd: { symbol: 'HK$', name: 'Hong Kong Dollar', decimals: 2 },
+  myr: { symbol: 'RM', name: 'Malaysian Ringgit', decimals: 2 },
+  thb: { symbol: '฿', name: 'Thai Baht', decimals: 2 },
+  php: { symbol: '₱', name: 'Philippine Peso', decimals: 2 },
+  vnd: { symbol: '₫', name: 'Vietnamese Dong', decimals: 0 },
 };
 
 /**
- * Get list of all supported currencies
- */
-function getSupportedCurrencies() {
-  return Object.keys(SUPPORTED_CURRENCIES).map(key => ({
-    id: key,
-    ...SUPPORTED_CURRENCIES[key]
-  }));
-}
-
-/**
- * Check if currency is supported
+ * Check if a currency is supported
+ * @param {string} currency - Currency code (e.g., 'usd', 'idr')
+ * @returns {boolean}
  */
 function isCurrencySupported(currency) {
-  return SUPPORTED_CURRENCIES.hasOwnProperty(currency.toLowerCase());
+  return SUPPORTED_CURRENCIES.includes(currency.toLowerCase());
 }
 
 /**
- * Get exchange rates for all supported currencies
- * Uses CoinGecko API which provides forex rates via Bitcoin as intermediary
+ * Get all supported currencies
+ * @returns {Array} Array of currency codes
  */
-async function getExchangeRates(baseCurrency = 'usd') {
-  const cacheKey = `rates_${baseCurrency}`;
-
-  // Check cache first
-  const cached = await cache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  try {
-    // Use CoinGecko's simple/price endpoint with multiple currencies
-    // We'll use BTC as intermediary to get forex rates
-    const currencies = Object.keys(SUPPORTED_CURRENCIES).join(',');
-    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: {
-        ids: 'bitcoin',
-        vs_currencies: currencies
-      }
-    });
-
-    const btcPrices = response.data.bitcoin;
-    const baseRate = btcPrices[baseCurrency.toLowerCase()];
-
-    // Calculate exchange rates relative to base currency
-    const rates = {};
-    for (const [currency, btcPrice] of Object.entries(btcPrices)) {
-      rates[currency] = btcPrice / baseRate;
-    }
-
-    const data = {
-      base: baseCurrency,
-      rates: rates,
-      timestamp: new Date().toISOString()
-    };
-
-    // Cache the result
-    await cache.set(cacheKey, data, cache.defaultTTL.exchangeRates);
-    return data;
-  } catch (error) {
-    console.error('Error fetching exchange rates:', error.message);
-    throw new Error('Failed to fetch exchange rates');
-  }
+function getSupportedCurrencies() {
+  return [...SUPPORTED_CURRENCIES];
 }
 
 /**
- * Convert amount from one currency to another
+ * Get currency information
+ * @param {string} currency - Currency code
+ * @returns {object|null} Currency info or null if not supported
  */
-async function convertCurrency(amount, fromCurrency, toCurrency) {
-  if (fromCurrency.toLowerCase() === toCurrency.toLowerCase()) {
-    return {
-      amount: amount,
-      fromCurrency,
-      toCurrency,
-      rate: 1
-    };
-  }
-
-  if (!isCurrencySupported(fromCurrency) || !isCurrencySupported(toCurrency)) {
-    throw new Error('Currency not supported');
-  }
-
-  const rates = await getExchangeRates(fromCurrency);
-  const rate = rates.rates[toCurrency.toLowerCase()];
-
-  if (!rate) {
-    throw new Error('Exchange rate not available');
-  }
-
-  return {
-    amount: amount * rate,
-    fromCurrency,
-    toCurrency,
-    rate: rate
-  };
+function getCurrencyInfo(currency) {
+  const currencyLower = currency.toLowerCase();
+  return CURRENCY_INFO[currencyLower] || null;
 }
 
 /**
- * Get crypto prices in multiple currencies
- */
-async function getCryptoPricesInCurrencies(coinId, currencies) {
-  try {
-    const currencyList = Array.isArray(currencies)
-      ? currencies.join(',')
-      : currencies;
-
-    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: {
-        ids: coinId,
-        vs_currencies: currencyList,
-        include_24hr_change: true
-      }
-    });
-
-    return response.data[coinId];
-  } catch (error) {
-    console.error('Error fetching crypto prices in currencies:', error.message);
-    throw new Error('Failed to fetch crypto prices');
-  }
-}
-
-/**
- * Format currency amount with proper symbol
+ * Format amount with currency symbol
+ * @param {number} amount - Amount to format
+ * @param {string} currency - Currency code
+ * @returns {string} Formatted amount with symbol
  */
 function formatCurrency(amount, currency) {
-  const currencyInfo = SUPPORTED_CURRENCIES[currency.toLowerCase()];
-  if (!currencyInfo) {
+  const currencyLower = currency.toLowerCase();
+  const info = CURRENCY_INFO[currencyLower];
+  
+  if (!info) {
     return `${amount.toFixed(2)} ${currency.toUpperCase()}`;
   }
-
-  const formattedAmount = amount.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-
-  return `${currencyInfo.symbol}${formattedAmount}`;
+  
+  const formattedAmount = amount.toFixed(info.decimals);
+  return `${info.symbol}${formattedAmount}`;
 }
 
 module.exports = {
-  SUPPORTED_CURRENCIES,
-  getSupportedCurrencies,
   isCurrencySupported,
-  getExchangeRates,
-  convertCurrency,
-  getCryptoPricesInCurrencies,
-  formatCurrency
+  getSupportedCurrencies,
+  getCurrencyInfo,
+  formatCurrency,
+  SUPPORTED_CURRENCIES,
+  CURRENCY_INFO
 };
