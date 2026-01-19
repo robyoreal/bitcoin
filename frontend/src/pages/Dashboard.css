@@ -83,12 +83,11 @@
   display: flex;
   gap: 24px;
   flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: flex-end;
 }
 
 .top-up-section-wrapper {
-  flex: 1;
-  min-width: 400px;
+  flex: 0 1 auto;
 }
 
 .section-title {
@@ -107,8 +106,8 @@
 .form-group {
   display: flex;
   flex-direction: column;
-  flex: 1;
-  min-width: 0;
+  min-width: 180px;
+  max-width: 250px;
 }
 
 .form-label {
@@ -143,8 +142,8 @@
 
 .exchange-section-wrapper {
   display: flex;
-  align-items: flex-end;
-  min-width: 200px;
+  flex-direction: column;
+  justify-content: flex-end;
 }
 
 .btn-exchange {
@@ -324,10 +323,11 @@
 
   .actions-section {
     flex-direction: column;
+    align-items: stretch;
   }
 
   .top-up-section-wrapper {
-    min-width: 100%;
+    width: 100%;
   }
 
   .top-up-controls {
@@ -337,6 +337,7 @@
 
   .form-group {
     width: 100%;
+    max-width: 100%;
   }
 
   .btn-topup {
@@ -345,7 +346,7 @@
   }
 
   .exchange-section-wrapper {
-    min-width: 100%;
+    width: 100%;
   }
 
   .btn-exchange {
