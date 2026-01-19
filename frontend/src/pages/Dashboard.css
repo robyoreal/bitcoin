@@ -74,20 +74,86 @@
   font-weight: 600;
 }
 
-.top-up-section {
+.actions-section {
   background: white;
-  padding: 20px;
+  padding: 24px;
   border-radius: 12px;
   margin-bottom: 24px;
-  display: flex;
-  gap: 12px;
-  align-items: center;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  align-items: flex-end;
 }
 
-.top-up-section input {
-  flex: 1;
-  max-width: 300px;
+.top-up-section-wrapper {
+  flex: 0 1 auto;
+}
+
+.section-title {
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+}
+
+.top-up-controls {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  max-width: 250px;
+}
+
+.form-label {
+  font-weight: 600;
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.form-group .input-field {
+  width: 100%;
+  height: 42px;
+  padding: 10px 12px;
+  border: 2px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.form-group .input-field:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+.btn-topup {
+  height: 42px;
+  padding: 0 24px;
+  white-space: nowrap;
+  align-self: flex-end;
+}
+
+.exchange-section-wrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.btn-exchange {
+  height: 42px;
+  padding: 0 20px;
+  white-space: nowrap;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .tabs {
@@ -255,12 +321,37 @@
     grid-template-columns: 1fr;
   }
 
-  .top-up-section {
+  .actions-section {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .top-up-section input {
+  .top-up-section-wrapper {
+    width: 100%;
+  }
+
+  .top-up-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-group {
+    width: 100%;
     max-width: 100%;
+  }
+
+  .btn-topup {
+    width: 100%;
+    align-self: stretch;
+  }
+
+  .exchange-section-wrapper {
+    width: 100%;
+  }
+
+  .btn-exchange {
+    width: 100%;
+    justify-content: center;
   }
 
   .trade-form {

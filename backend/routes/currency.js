@@ -15,32 +15,25 @@ let ratesCacheTime = {};
 const RATES_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 /**
- * Get currency exchange rates
- * GET /api/currency/rates/:baseCurrency (optional)
- * GET /api/currency/rates?base=usd (query param)
+ * Helper function to get exchange rates (from cache or API)
+ * @param {string} baseCurrency - Base currency code (e.g., 'usd')
+ * @returns {Promise<Object>} - Rates object
  */
-router.get('/rates/:baseCurrency?', async (req, res) => {
-  try {
-    const baseCurrency = (req.params.baseCurrency || req.query.base || 'usd').toLowerCase();
-    const now = Date.now();
-    
-    console.log(`[Currency Rates] Fetching rates for base: ${baseCurrency}`);
-    
-    // Return cached rates if still valid
-    if (ratesCache[baseCurrency] && (now - (ratesCacheTime[baseCurrency] || 0)) < RATES_CACHE_DURATION) {
-      console.log(`[Currency Rates] Returning cached rates for ${baseCurrency}`);
-      return res.json({
-        success: true,
-        base: baseCurrency.toUpperCase(),
-        rates: ratesCache[baseCurrency],
-        cached: true
-      });
-    }
+async function getExchangeRates(baseCurrency = 'usd') {
+  const now = Date.now();
+  baseCurrency = baseCurrency.toLowerCase();
 
+  // Return cached rates if still valid
+  if (ratesCache[baseCurrency] && (now - (ratesCacheTime[baseCurrency] || 0)) < RATES_CACHE_DURATION) {
+    console.log(`[Currency Rates] Using cached rates for ${baseCurrency}`);
+    return ratesCache[baseCurrency];
+  }
+
+  try {
     // Fetch fresh rates from CoinGecko
     const currencies = getSupportedCurrencies().join(',');
-    console.log(`[Currency Rates] Fetching from CoinGecko for currencies: ${currencies}`);
-    
+    console.log(`[Currency Rates] Fetching from CoinGecko for base: ${baseCurrency}`);
+
     const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
       params: {
         ids: 'tether', // USDT as proxy for all currencies
@@ -49,39 +42,57 @@ router.get('/rates/:baseCurrency?', async (req, res) => {
     });
 
     const usdRates = response.data.tether || {};
-    console.log(`[Currency Rates] Got rates from CoinGecko:`, Object.keys(usdRates));
-    
+
     // Calculate rates relative to base currency
     let rates = {};
     const baseRate = usdRates[baseCurrency] || 1;
-    
-    if (!usdRates[baseCurrency]) {
-      console.warn(`[Currency Rates] Base currency ${baseCurrency} not found in rates, using 1`);
-    }
-    
+
     Object.keys(usdRates).forEach(currency => {
-      // Rate from base to target = (usd to target) / (usd to base)
-      // Ensure keys are lowercase
       rates[currency.toLowerCase()] = usdRates[currency] / baseRate;
     });
-    
-    console.log(`[Currency Rates] Calculated rates relative to ${baseCurrency}:`, Object.keys(rates));
-    
+
     // Cache the rates
     ratesCache[baseCurrency] = rates;
     ratesCacheTime[baseCurrency] = now;
+
+    console.log(`[Currency Rates] Cached new rates for ${baseCurrency}`);
+    return rates;
+  } catch (error) {
+    // If API call fails (e.g., rate limit), return stale cache if available
+    if (error.response?.status === 429 && ratesCache[baseCurrency]) {
+      console.log(`[Currency Rates] Rate limit hit, using stale cache for ${baseCurrency}`);
+      return ratesCache[baseCurrency];
+    }
+    // Re-throw error if no cache available
+    throw error;
+  }
+}
+
+/**
+ * Get currency exchange rates
+ * GET /api/currency/rates/:baseCurrency (optional)
+ * GET /api/currency/rates?base=usd (query param)
+ */
+router.get('/rates/:baseCurrency?', async (req, res) => {
+  try {
+    const baseCurrency = (req.params.baseCurrency || req.query.base || 'usd').toLowerCase();
+    console.log(`[Currency Rates] Request for rates with base: ${baseCurrency}`);
+
+    const rates = await getExchangeRates(baseCurrency);
+    const now = Date.now();
+    const isCached = (now - (ratesCacheTime[baseCurrency] || 0)) < RATES_CACHE_DURATION;
 
     res.json({
       success: true,
       base: baseCurrency.toUpperCase(),
       rates,
-      cached: false
+      cached: isCached
     });
   } catch (error) {
     console.error('[Currency Rates] Error fetching rates:', error.message);
-    
+
     const baseCurrency = (req.params.baseCurrency || req.query.base || 'usd').toLowerCase();
-    
+
     // Return cached rates if available, even if expired
     if (ratesCache[baseCurrency]) {
       console.log(`[Currency Rates] Returning stale cached rates for ${baseCurrency}`);
@@ -93,10 +104,10 @@ router.get('/rates/:baseCurrency?', async (req, res) => {
         stale: true
       });
     }
-    
-    res.status(500).json({ 
+
+    res.status(500).json({
       success: false,
-      error: 'Failed to fetch currency rates' 
+      error: 'Failed to fetch currency rates'
     });
   }
 });
@@ -117,25 +128,20 @@ router.post('/exchange', authenticateToken, async (req, res) => {
   const toCurr = toCurrency.toLowerCase();
 
   try {
-    // Get exchange rate
-    const currencies = getSupportedCurrencies().join(',');
-    const response = await axios.get('https://api.coingecko.com/api/v3/simple/price', {
-      params: {
-        ids: 'tether',
-        vs_currencies: currencies
-      }
-    });
+    // Get exchange rates using cached rates (base USD)
+    console.log(`[Exchange] Exchanging ${amount} ${fromCurr} to ${toCurr}`);
+    const rates = await getExchangeRates('usd');
 
-    const usdRates = response.data.tether || {};
-    const fromRate = usdRates[fromCurr];
-    const toRate = usdRates[toCurr];
-    
+    const fromRate = rates[fromCurr];
+    const toRate = rates[toCurr];
+
     if (!fromRate || !toRate) {
       return res.status(400).json({ error: 'Currency not supported' });
     }
 
     const exchangeRate = toRate / fromRate;
     const convertedAmount = amount * exchangeRate;
+    console.log(`[Exchange] Rate: ${exchangeRate}, Converted: ${convertedAmount}`);
 
     // Check if user has enough balance in source currency
     db.get(
@@ -225,7 +231,7 @@ router.post('/exchange', authenticateToken, async (req, res) => {
       }
     );
   } catch (error) {
-    console.error('Exchange error:', error);
+    console.error('[Exchange] Error:', error.message);
     res.status(500).json({ error: 'Failed to complete exchange: ' + error.message });
   }
 });
