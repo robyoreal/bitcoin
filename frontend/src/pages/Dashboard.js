@@ -171,32 +171,33 @@ function Dashboard({ onLogout }) {
 
       <MultiCurrencyBalances balances={balances} stats={stats} />
 
-      <div className="actions-section" style={{ marginTop: '20px', display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
-        <div className="top-up-section" style={{ flex: '1', minWidth: '300px' }}>
-          <h3>Top Up Balance</h3>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end' }}>
-            <div style={{ flex: '1' }}>
+      <div className="actions-section">
+        <div className="top-up-section-wrapper">
+          <h3 className="section-title">Top Up Balance</h3>
+          <div className="top-up-controls">
+            <div className="form-group">
               <CurrencySelector value={topUpCurrency} onChange={setTopUpCurrency} label="Currency" />
             </div>
-            <input
-              type="number"
-              placeholder="Amount to add"
-              value={topUpAmount}
-              onChange={(e) => setTopUpAmount(e.target.value)}
-              className="input-field"
-              style={{ flex: '1' }}
-            />
-            <button onClick={handleTopUp} className="btn-primary">
+            <div className="form-group">
+              <label className="form-label">Amount to add:</label>
+              <input
+                type="number"
+                placeholder="Enter amount"
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                className="input-field"
+              />
+            </div>
+            <button onClick={handleTopUp} className="btn-primary btn-topup">
               Top Up
             </button>
           </div>
         </div>
 
-        <div className="exchange-section" style={{ flex: '0', minWidth: '200px', display: 'flex', alignItems: 'flex-end' }}>
+        <div className="exchange-section-wrapper">
           <button
             onClick={() => setShowExchangeModal(true)}
-            className="btn-primary"
-            style={{ width: '100%', padding: '12px 24px' }}
+            className="btn-primary btn-exchange"
           >
             💱 Currency Exchange (Forex)
           </button>
