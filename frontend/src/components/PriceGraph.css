@@ -1,0 +1,219 @@
+.price-graph-container {
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.price-graph-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.price-graph-left {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-width: 250px;
+}
+
+.crypto-selector {
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 500;
+  background: #ffffff;
+  color: #1f2937;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s;
+  max-width: 300px;
+}
+
+.crypto-selector:hover {
+  border-color: #9ca3af;
+}
+
+.crypto-selector:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.price-info {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.current-price {
+  font-size: 32px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1;
+}
+
+.price-change {
+  font-size: 16px;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.price-change.positive {
+  color: #059669;
+  background: #d1fae5;
+}
+
+.price-change.negative {
+  color: #dc2626;
+  background: #fee2e2;
+}
+
+.change-label {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+
+.time-range-selector {
+  display: flex;
+  gap: 8px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.time-range-btn {
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.time-range-btn:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.time-range-btn.active {
+  background: #ffffff;
+  color: #1f2937;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.chart-wrapper {
+  height: 400px;
+  position: relative;
+}
+
+.chart-loading,
+.chart-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #6b7280;
+}
+
+.chart-loading p {
+  margin-top: 16px;
+  font-size: 14px;
+}
+
+.chart-error {
+  color: #dc2626;
+}
+
+.chart-error p {
+  margin-bottom: 12px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.chart-error button {
+  padding: 8px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.chart-error button:hover {
+  background: #2563eb;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #e5e7eb;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spinner 0.8s linear infinite;
+}
+
+@keyframes spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .price-graph-container {
+    padding: 16px;
+  }
+
+  .price-graph-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .price-graph-left {
+    min-width: 100%;
+  }
+
+  .crypto-selector {
+    max-width: 100%;
+  }
+
+  .current-price {
+    font-size: 28px;
+  }
+
+  .price-change {
+    font-size: 14px;
+  }
+
+  .time-range-selector {
+    justify-content: stretch;
+  }
+
+  .time-range-btn {
+    flex: 1;
+    padding: 10px 12px;
+  }
+
+  .chart-wrapper {
+    height: 300px;
+  }
+}

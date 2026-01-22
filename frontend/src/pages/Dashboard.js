@@ -12,6 +12,7 @@ import {
 import CurrencySelector from '../components/CurrencySelector';
 import MultiCurrencyBalances from '../components/MultiCurrencyBalances';
 import CurrencyExchange from '../components/CurrencyExchange';
+import PriceGraph from '../components/PriceGraph';
 import './Dashboard.css';
 
 function Dashboard({ onLogout }) {
@@ -229,6 +230,7 @@ function Dashboard({ onLogout }) {
         {activeTab === 'market' && (
           <div className="market-section">
             <h2>Top Cryptocurrencies</h2>
+            <PriceGraph cryptos={cryptos} initialCoinId="bitcoin" />
             {selectedCrypto && (
               <div className="trade-panel">
                 <h3>Buy {selectedCrypto.name} ({selectedCrypto.symbol})</h3>
