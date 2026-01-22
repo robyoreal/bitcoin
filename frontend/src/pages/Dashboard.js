@@ -13,6 +13,7 @@ import CurrencySelector from '../components/CurrencySelector';
 import MultiCurrencyBalances from '../components/MultiCurrencyBalances';
 import CurrencyExchange from '../components/CurrencyExchange';
 import PriceGraph from '../components/PriceGraph';
+import { formatCurrency as formatCurrencyUtil, formatPercentage } from '../utils/currencyFormatter';
 import './Dashboard.css';
 
 function Dashboard({ onLogout }) {
@@ -135,15 +136,24 @@ function Dashboard({ onLogout }) {
     }
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(value);
+  const formatCurrency = (value, currency = 'usd') => {
+    return formatCurrencyUtil(value, currency);
   };
 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString();
+  };
+
+  // Get current price for a crypto from the market data
+  const getCurrentPrice = (coinId) => {
+    const crypto = cryptos.find(c => c.id === coinId);
+    return crypto ? crypto.current_price : null;
+  };
+
+  // Calculate percentage change between two prices
+  const calculatePriceChange = (buyPrice, currentPrice) => {
+    if (!currentPrice || !buyPrice || buyPrice === 0) return 0;
+    return ((currentPrice - buyPrice) / buyPrice) * 100;
   };
 
   if (loading) {
@@ -234,7 +244,7 @@ function Dashboard({ onLogout }) {
             {selectedCrypto && (
               <div className="trade-panel">
                 <h3>Buy {selectedCrypto.name} ({selectedCrypto.symbol})</h3>
-                <p>Current Price: {formatCurrency(selectedCrypto.current_price)}</p>
+                <p>Current Price: {formatCurrency(selectedCrypto.current_price, selectedCrypto.currency || 'usd')}</p>
                 <div className="trade-form">
                   <CurrencySelector
                     value={tradeCurrency}
@@ -258,7 +268,7 @@ function Dashboard({ onLogout }) {
                 </div>
                 {tradeAmount && (
                   <p className="trade-total">
-                    Total: {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.current_price)}
+                    Total: {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.current_price, tradeCurrency)}
                   </p>
                 )}
               </div>
@@ -285,11 +295,11 @@ function Dashboard({ onLogout }) {
                         <span className="symbol">{crypto.symbol}</span>
                       </div>
                     </td>
-                    <td>{formatCurrency(crypto.current_price)}</td>
+                    <td>{formatCurrency(crypto.current_price, crypto.currency || 'usd')}</td>
                     <td className={crypto.price_change_24h >= 0 ? 'positive' : 'negative'}>
-                      {crypto.price_change_24h?.toFixed(2)}%
+                      {formatPercentage(crypto.price_change_24h || 0)}
                     </td>
-                    <td>{formatCurrency(crypto.market_cap)}</td>
+                    <td>{formatCurrency(crypto.market_cap, crypto.currency || 'usd')}</td>
                     <td>
                       <button
                         onClick={() => setSelectedCrypto(crypto)}
@@ -317,32 +327,53 @@ function Dashboard({ onLogout }) {
                     <th>Name</th>
                     <th>Amount</th>
                     <th>Avg Buy Price</th>
+                    <th>Current Price</th>
                     <th>Current Value</th>
+                    <th>Changes</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {portfolio.map((holding) => (
-                    <tr key={holding.id}>
-                      <td>
-                        <div className="crypto-name">
-                          <span>{holding.name}</span>
-                          <span className="symbol">{holding.symbol}</span>
-                        </div>
-                      </td>
-                      <td>{holding.amount.toFixed(8)}</td>
-                      <td>{formatCurrency(holding.average_buy_price)}</td>
-                      <td>{formatCurrency(holding.amount * holding.average_buy_price)}</td>
-                      <td>
-                        <button
-                          onClick={() => handleSell(holding)}
-                          className="btn-small btn-danger"
-                        >
-                          Sell
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {portfolio.map((holding) => {
+                    const currentPrice = getCurrentPrice(holding.coin_id);
+                    const priceChange = calculatePriceChange(holding.average_buy_price, currentPrice);
+                    const currentValue = currentPrice ? holding.amount * currentPrice : holding.amount * holding.average_buy_price;
+                    const holdingCurrency = holding.currency || 'usd';
+
+                    return (
+                      <tr key={holding.id}>
+                        <td>
+                          <div className="crypto-name">
+                            <span>{holding.name}</span>
+                            <span className="symbol">{holding.symbol}</span>
+                          </div>
+                        </td>
+                        <td>{holding.amount.toFixed(8)}</td>
+                        <td>{formatCurrency(holding.average_buy_price, holdingCurrency)}</td>
+                        <td>
+                          {currentPrice
+                            ? formatCurrency(currentPrice, holdingCurrency)
+                            : <span className="text-muted">N/A</span>
+                          }
+                        </td>
+                        <td>{formatCurrency(currentValue, holdingCurrency)}</td>
+                        <td className={currentPrice && priceChange !== 0 ? (priceChange >= 0 ? 'positive' : 'negative') : ''}>
+                          {currentPrice
+                            ? formatPercentage(priceChange)
+                            : <span className="text-muted">N/A</span>
+                          }
+                        </td>
+                        <td>
+                          <button
+                            onClick={() => handleSell(holding)}
+                            className="btn-small btn-danger"
+                          >
+                            Sell
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -377,8 +408,8 @@ function Dashboard({ onLogout }) {
                       </td>
                       <td>{tx.symbol}</td>
                       <td>{tx.amount.toFixed(8)}</td>
-                      <td>{formatCurrency(tx.price)}</td>
-                      <td>{formatCurrency(tx.total)}</td>
+                      <td>{formatCurrency(tx.price, tx.currency || 'usd')}</td>
+                      <td>{formatCurrency(tx.total, tx.currency || 'usd')}</td>
                     </tr>
                   ))}
                 </tbody>
