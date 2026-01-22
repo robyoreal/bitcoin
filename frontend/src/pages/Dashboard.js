@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   getTopCryptos,
   getPortfolio,
@@ -32,13 +32,12 @@ function Dashboard({ onLogout }) {
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [message, setMessage] = useState('');
 
-  useEffect(() => {
-    const userData = JSON.parse(localStorage.getItem('user') || '{}');
-    setUser(userData);
-    loadData();
+  const showMessage = useCallback((msg, type = 'success') => {
+    setMessage({ text: msg, type });
+    setTimeout(() => setMessage(''), 3000);
   }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [cryptosRes, portfolioRes, statsRes, historyRes, balancesRes] = await Promise.all([
@@ -60,12 +59,13 @@ function Dashboard({ onLogout }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showMessage]);
 
-  const showMessage = (msg, type = 'success') => {
-    setMessage({ text: msg, type });
-    setTimeout(() => setMessage(''), 3000);
-  };
+  useEffect(() => {
+    const userData = JSON.parse(localStorage.getItem('user') || '{}');
+    setUser(userData);
+    loadData();
+  }, [loadData]);
 
   const handleTopUp = async () => {
     const amount = parseFloat(topUpAmount);
