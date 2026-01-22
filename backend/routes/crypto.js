@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { getTopCryptos, getCryptoPrice, getCryptoPriceMultiCurrency, searchCrypto } = require('../services/cryptoAPI');
-const { getHistoricalPrices, getRateLimitStatus } = require('../services/historicalPriceAPI');
+const { getTopCryptos, getCryptoPrice, getCryptoPriceMultiCurrency, searchCrypto, getRateLimitStatus: getCryptoRateLimitStatus } = require('../services/cryptoAPI');
+const { getHistoricalPrices, getRateLimitStatus: getHistoricalRateLimitStatus } = require('../services/historicalPriceAPI');
 const { authenticateToken } = require('../middleware/auth');
 
 // Get top cryptocurrencies by market cap
@@ -64,7 +64,15 @@ router.get('/historical/:coinId', authenticateToken, async (req, res) => {
 // Get rate limit status for all API providers
 router.get('/rate-limit-status', authenticateToken, async (req, res) => {
   try {
-    const status = getRateLimitStatus();
+    const cryptoStatus = getCryptoRateLimitStatus();
+    const historicalStatus = getHistoricalRateLimitStatus();
+
+    // Merge statuses from both services
+    const status = {
+      current_prices: cryptoStatus,
+      historical_prices: historicalStatus
+    };
+
     res.json({ success: true, data: status });
   } catch (error) {
     res.status(500).json({ error: error.message });
