@@ -8,6 +8,7 @@ import {
   sellCrypto,
   topUpBalance,
   getAllBalances,
+  getExchangeRates,
 } from '../services/api';
 import CurrencySelector from '../components/CurrencySelector';
 import MultiCurrencyBalances from '../components/MultiCurrencyBalances';
@@ -32,6 +33,7 @@ function Dashboard({ onLogout }) {
   const [tradeCurrency, setTradeCurrency] = useState('usd');
   const [showExchangeModal, setShowExchangeModal] = useState(false);
   const [message, setMessage] = useState('');
+  const [exchangeRates, setExchangeRates] = useState(null);
 
   const showMessage = useCallback((msg, type = 'success') => {
     setMessage({ text: msg, type });
@@ -41,12 +43,13 @@ function Dashboard({ onLogout }) {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cryptosRes, portfolioRes, statsRes, historyRes, balancesRes] = await Promise.all([
+      const [cryptosRes, portfolioRes, statsRes, historyRes, balancesRes, ratesRes] = await Promise.all([
         getTopCryptos(50),
         getPortfolio(),
         getStats(),
         getTransactionHistory(20),
         getAllBalances(),
+        getExchangeRates('usd'),
       ]);
 
       setCryptos(cryptosRes.data.data);
@@ -54,6 +57,7 @@ function Dashboard({ onLogout }) {
       setStats(statsRes.data.stats);
       setTransactions(historyRes.data.transactions);
       setBalances(balancesRes.data.balances || []);
+      setExchangeRates(ratesRes.data);
     } catch (error) {
       console.error('Error loading data:', error);
       showMessage('Error loading data', 'error');
@@ -144,10 +148,29 @@ function Dashboard({ onLogout }) {
     return new Date(dateString).toLocaleString();
   };
 
-  // Get current price for a crypto from the market data
-  const getCurrentPrice = (coinId) => {
+  // Get current price for a crypto in a specific currency
+  const getCurrentPrice = (coinId, currency = 'usd') => {
     const crypto = cryptos.find(c => c.id === coinId);
-    return crypto ? crypto.current_price : null;
+    if (!crypto) return null;
+
+    const usdPrice = crypto.current_price;
+    const targetCurrency = currency.toLowerCase();
+
+    // If requesting USD price, return directly
+    if (targetCurrency === 'usd') {
+      return usdPrice;
+    }
+
+    // Convert USD price to target currency using exchange rates
+    if (exchangeRates && exchangeRates.rates) {
+      const rate = exchangeRates.rates[targetCurrency];
+      if (rate) {
+        return usdPrice * rate;
+      }
+    }
+
+    // If exchange rate not available, return null
+    return null;
   };
 
   // Calculate percentage change between two prices
@@ -335,10 +358,10 @@ function Dashboard({ onLogout }) {
                 </thead>
                 <tbody>
                   {portfolio.map((holding) => {
-                    const currentPrice = getCurrentPrice(holding.coin_id);
+                    const holdingCurrency = holding.currency || 'usd';
+                    const currentPrice = getCurrentPrice(holding.coin_id, holdingCurrency);
                     const priceChange = calculatePriceChange(holding.average_buy_price, currentPrice);
                     const currentValue = currentPrice ? holding.amount * currentPrice : holding.amount * holding.average_buy_price;
-                    const holdingCurrency = holding.currency || 'usd';
 
                     return (
                       <tr key={holding.id}>
