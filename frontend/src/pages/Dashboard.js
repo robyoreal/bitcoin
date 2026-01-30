@@ -192,38 +192,6 @@ function Dashboard({ onLogout }) {
           <div className="market-section">
             <h2>Top Cryptocurrencies</h2>
             <PriceGraph cryptos={cryptos} initialCoinId="bitcoin" />
-            {selectedCrypto && (
-              <div className="trade-panel">
-                <h3>Buy {selectedCrypto.name} ({selectedCrypto.symbol})</h3>
-                <p>Current Price: {formatCurrency(selectedCrypto.current_price, selectedCrypto.currency || 'usd')}</p>
-                <div className="trade-form">
-                  <CurrencySelector
-                    value={tradeCurrency}
-                    onChange={setTradeCurrency}
-                    label="Pay with"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Amount of crypto"
-                    value={tradeAmount}
-                    onChange={(e) => setTradeAmount(e.target.value)}
-                    className="input-field"
-                    step="0.00000001"
-                  />
-                  <button onClick={handleBuy} className="btn-primary">
-                    Buy
-                  </button>
-                  <button onClick={() => setSelectedCrypto(null)} className="btn-secondary">
-                    Cancel
-                  </button>
-                </div>
-                {tradeAmount && (
-                  <p className="trade-total">
-                    Total: {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.current_price, tradeCurrency)}
-                  </p>
-                )}
-              </div>
-            )}
             <table className="crypto-table">
               <thead>
                 <tr>
@@ -316,7 +284,7 @@ function Dashboard({ onLogout }) {
                         </td>
                         <td>
                           <button
-                            onClick={() => handleSell(holding)}
+                            onClick={() => handleSellFromPortfolio(holding)}
                             className="btn-small btn-danger"
                           >
                             Sell
