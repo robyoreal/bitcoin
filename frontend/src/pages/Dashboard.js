@@ -14,7 +14,7 @@ import BuySellModal from '../components/BuySellModal';
 import PriceGraph from '../components/PriceGraph';
 import { formatCurrency as formatCurrencyUtil, formatPercentage } from '../utils/currencyFormatter';
 import './Dashboard.css';
-
+ 
 function Dashboard({ onLogout }) {
   const [user, setUser] = useState(null);
   const [cryptos, setCryptos] = useState([]);
@@ -30,12 +30,12 @@ function Dashboard({ onLogout }) {
   const [showBuySellModal, setShowBuySellModal] = useState(false);
   const [message, setMessage] = useState('');
   const [exchangeRates, setExchangeRates] = useState(null);
-
+ 
   const showMessage = useCallback((msg, type = 'success') => {
     setMessage({ text: msg, type });
     setTimeout(() => setMessage(''), 3000);
   }, []);
-
+ 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -47,7 +47,7 @@ function Dashboard({ onLogout }) {
         getAllBalances(),
         getExchangeRates('usd'),
       ]);
-
+ 
       setCryptos(cryptosRes.data.data);
       setPortfolio(portfolioRes.data.portfolio);
       setStats(statsRes.data.stats);
@@ -61,18 +61,18 @@ function Dashboard({ onLogout }) {
       setLoading(false);
     }
   }, [showMessage]);
-
+ 
   useEffect(() => {
     const userData = JSON.parse(localStorage.getItem('user') || '{}');
     setUser(userData);
     loadData();
   }, [loadData]);
-
+ 
   const openBuySellModal = (crypto, mode = 'buy') => {
     setSelectedCrypto({ ...crypto, initialMode: mode });
     setShowBuySellModal(true);
   };
-
+ 
   const handleSellFromPortfolio = (holding) => {
     // Convert holding to crypto format for the modal
     const crypto = {
@@ -85,28 +85,28 @@ function Dashboard({ onLogout }) {
     setSelectedCrypto(crypto);
     setShowBuySellModal(true);
   };
-
+ 
   const formatCurrency = (value, currency = 'usd') => {
     return formatCurrencyUtil(value, currency);
   };
-
+ 
   const formatDate = (dateString) => {
     return new Date(dateString).toLocaleString();
   };
-
+ 
   // Get current price for a crypto in a specific currency
   const getCurrentPrice = (coinId, currency = 'usd') => {
     const crypto = cryptos.find(c => c.id === coinId);
     if (!crypto) return null;
-
+ 
     const usdPrice = crypto.current_price;
     const targetCurrency = currency.toLowerCase();
-
+ 
     // If requesting USD price, return directly
     if (targetCurrency === 'usd') {
       return usdPrice;
     }
-
+ 
     // Convert USD price to target currency using exchange rates
     if (exchangeRates && exchangeRates.rates) {
       const rate = exchangeRates.rates[targetCurrency];
@@ -114,17 +114,17 @@ function Dashboard({ onLogout }) {
         return usdPrice * rate;
       }
     }
-
+ 
     // If exchange rate not available, return null
     return null;
   };
-
+ 
   // Calculate percentage change between two prices
   const calculatePriceChange = (buyPrice, currentPrice) => {
     if (!currentPrice || !buyPrice || buyPrice === 0) return 0;
     return ((currentPrice - buyPrice) / buyPrice) * 100;
   };
-
+ 
   if (loading) {
     return (
       <div className="dashboard-container">
@@ -132,7 +132,7 @@ function Dashboard({ onLogout }) {
       </div>
     );
   }
-
+ 
   return (
     <div className="dashboard-container">
       <header className="dashboard-header">
@@ -142,15 +142,15 @@ function Dashboard({ onLogout }) {
           <button onClick={onLogout} className="btn-secondary">Logout</button>
         </div>
       </header>
-
+ 
       {message && (
         <div className={`message ${message.type}`}>
           {message.text}
         </div>
       )}
-
+ 
       <MultiCurrencyBalances balances={balances} stats={stats} />
-
+ 
       <div className="actions-section">
         <button
           onClick={() => setShowTopUpModal(true)}
@@ -165,7 +165,7 @@ function Dashboard({ onLogout }) {
           💱 Currency Exchange
         </button>
       </div>
-
+ 
       <div className="tabs">
         <button
           className={activeTab === 'market' ? 'active' : ''}
@@ -186,44 +186,12 @@ function Dashboard({ onLogout }) {
           History
         </button>
       </div>
-
+ 
       <div className="tab-content">
         {activeTab === 'market' && (
           <div className="market-section">
             <h2>Top Cryptocurrencies</h2>
             <PriceGraph cryptos={cryptos} initialCoinId="bitcoin" />
-            {selectedCrypto && (
-              <div className="trade-panel">
-                <h3>Buy {selectedCrypto.name} ({selectedCrypto.symbol})</h3>
-                <p>Current Price: {formatCurrency(selectedCrypto.current_price, selectedCrypto.currency || 'usd')}</p>
-                <div className="trade-form">
-                  <CurrencySelector
-                    value={tradeCurrency}
-                    onChange={setTradeCurrency}
-                    label="Pay with"
-                  />
-                  <input
-                    type="number"
-                    placeholder="Amount of crypto"
-                    value={tradeAmount}
-                    onChange={(e) => setTradeAmount(e.target.value)}
-                    className="input-field"
-                    step="0.00000001"
-                  />
-                  <button onClick={handleBuy} className="btn-primary">
-                    Buy
-                  </button>
-                  <button onClick={() => setSelectedCrypto(null)} className="btn-secondary">
-                    Cancel
-                  </button>
-                </div>
-                {tradeAmount && (
-                  <p className="trade-total">
-                    Total: {formatCurrency(parseFloat(tradeAmount) * selectedCrypto.current_price, tradeCurrency)}
-                  </p>
-                )}
-              </div>
-            )}
             <table className="crypto-table">
               <thead>
                 <tr>
@@ -265,7 +233,7 @@ function Dashboard({ onLogout }) {
             </table>
           </div>
         )}
-
+ 
         {activeTab === 'portfolio' && (
           <div className="portfolio-section">
             <h2>Your Portfolio</h2>
@@ -290,7 +258,7 @@ function Dashboard({ onLogout }) {
                     const currentPrice = getCurrentPrice(holding.coin_id, holdingCurrency);
                     const priceChange = calculatePriceChange(holding.average_buy_price, currentPrice);
                     const currentValue = currentPrice ? holding.amount * currentPrice : holding.amount * holding.average_buy_price;
-
+ 
                     return (
                       <tr key={holding.id}>
                         <td>
@@ -316,7 +284,7 @@ function Dashboard({ onLogout }) {
                         </td>
                         <td>
                           <button
-                            onClick={() => handleSell(holding)}
+                            onClick={() => handleSellFromPortfolio(holding)}
                             className="btn-small btn-danger"
                           >
                             Sell
@@ -330,7 +298,7 @@ function Dashboard({ onLogout }) {
             )}
           </div>
         )}
-
+ 
         {activeTab === 'history' && (
           <div className="history-section">
             <h2>Transaction History</h2>
@@ -369,7 +337,7 @@ function Dashboard({ onLogout }) {
           </div>
         )}
       </div>
-
+ 
       {showExchangeModal && (
         <CurrencyExchange
           onExchangeComplete={(data) => {
@@ -379,7 +347,7 @@ function Dashboard({ onLogout }) {
           onClose={() => setShowExchangeModal(false)}
         />
       )}
-
+ 
       {showTopUpModal && (
         <TopUpModal
           onTopUpComplete={(data) => {
@@ -389,7 +357,7 @@ function Dashboard({ onLogout }) {
           onClose={() => setShowTopUpModal(false)}
         />
       )}
-
+ 
       {showBuySellModal && selectedCrypto && (
         <BuySellModal
           crypto={selectedCrypto}
@@ -406,5 +374,5 @@ function Dashboard({ onLogout }) {
     </div>
   );
 }
-
+ 
 export default Dashboard;
