@@ -76,84 +76,24 @@
 
 .actions-section {
   background: white;
-  padding: 24px;
+  padding: 20px;
   border-radius: 12px;
   margin-bottom: 24px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   display: flex;
-  gap: 24px;
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
-
-.top-up-section-wrapper {
-  flex: 0 1 auto;
-}
-
-.section-title {
-  color: #333;
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0 0 16px 0;
-}
-
-.top-up-controls {
-  display: flex;
   gap: 12px;
-  align-items: flex-end;
+  flex-wrap: wrap;
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  min-width: 180px;
-  max-width: 250px;
-}
-
-.form-label {
-  font-weight: 600;
-  color: #666;
-  font-size: 14px;
-  margin-bottom: 6px;
-}
-
-.form-group .input-field {
-  width: 100%;
-  height: 42px;
-  padding: 10px 12px;
-  border: 2px solid #e0e0e0;
-  border-radius: 6px;
-  font-size: 14px;
-  box-sizing: border-box;
-  transition: border-color 0.2s;
-}
-
-.form-group .input-field:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
-.btn-topup {
-  height: 42px;
+.btn-action {
+  height: 48px;
   padding: 0 24px;
   white-space: nowrap;
-  align-self: flex-end;
-}
-
-.exchange-section-wrapper {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-}
-
-.btn-exchange {
-  height: 42px;
-  padding: 0 20px;
-  white-space: nowrap;
-  font-size: 14px;
+  font-size: 15px;
   display: flex;
   align-items: center;
   gap: 8px;
+  border-radius: 8px;
 }
 
 .tabs {
@@ -197,43 +137,6 @@
   color: #333;
   margin-bottom: 20px;
   font-size: 22px;
-}
-
-.trade-panel {
-  background: #f8f9fa;
-  padding: 20px;
-  border-radius: 8px;
-  margin-bottom: 24px;
-  border: 2px solid #667eea;
-}
-
-.trade-panel h3 {
-  color: #333;
-  margin-bottom: 12px;
-}
-
-.trade-panel p {
-  color: #666;
-  margin-bottom: 16px;
-  font-weight: 600;
-}
-
-.trade-form {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-}
-
-.trade-form input {
-  flex: 1;
-  max-width: 200px;
-}
-
-.trade-total {
-  margin-top: 12px;
-  font-size: 18px;
-  font-weight: 700;
-  color: #667eea;
 }
 
 .crypto-table {
@@ -323,43 +226,11 @@
 
   .actions-section {
     flex-direction: column;
-    align-items: stretch;
   }
 
-  .top-up-section-wrapper {
-    width: 100%;
-  }
-
-  .top-up-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .form-group {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .btn-topup {
-    width: 100%;
-    align-self: stretch;
-  }
-
-  .exchange-section-wrapper {
-    width: 100%;
-  }
-
-  .btn-exchange {
+  .btn-action {
     width: 100%;
     justify-content: center;
-  }
-
-  .trade-form {
-    flex-direction: column;
-  }
-
-  .trade-form input {
-    max-width: 100%;
   }
 
   .crypto-table {
