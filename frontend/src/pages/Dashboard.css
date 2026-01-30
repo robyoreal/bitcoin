@@ -226,7 +226,7 @@
 
 .trade-form input {
   flex: 1;
-  max-width: 200px;
+  min-width: 200px;
 }
 
 .trade-total {
@@ -370,4 +370,21 @@
   .crypto-table td {
     padding: 8px;
   }
+}
+
+/* Table cell positive/negative colors */
+.crypto-table td.positive {
+  color: #28a745;
+  font-weight: 600;
+}
+
+.crypto-table td.negative {
+  color: #dc3545;
+  font-weight: 600;
+}
+
+/* Muted text for N/A values */
+.text-muted {
+  color: #999;
+  font-style: italic;
 }

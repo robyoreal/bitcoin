@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import CurrencySelector from './CurrencySelector';
 import { exchangeCurrency, getExchangeRates, getAllBalances } from '../services/api';
 import './CurrencyExchange.css';
@@ -13,15 +13,41 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const loadBalances = useCallback(async () => {
+    try {
+      const response = await getAllBalances();
+      const balanceMap = {};
+      if (response.data.balances) {
+        response.data.balances.forEach(b => {
+          balanceMap[b.currency.toLowerCase()] = b.amount;
+        });
+      }
+      setBalances(balanceMap);
+    } catch (error) {
+      console.error('Error loading balances:', error);
+    }
+  }, []);
+
+  const loadExchangeRate = useCallback(async () => {
+    try {
+      const response = await getExchangeRates(fromCurrency);
+      console.log('Exchange rate response:', response.data);
+      setExchangeRate(response.data);
+    } catch (error) {
+      console.error('Error loading exchange rate:', error);
+      setError('Failed to load exchange rates');
+    }
+  }, [fromCurrency]);
+
   useEffect(() => {
     loadBalances();
-  }, []);
+  }, [loadBalances]);
 
   useEffect(() => {
     if (fromCurrency && toCurrency) {
       loadExchangeRate();
     }
-  }, [fromCurrency, toCurrency]);
+  }, [fromCurrency, toCurrency, loadExchangeRate]);
 
   useEffect(() => {
     if (exchangeRate && amount) {
@@ -37,32 +63,6 @@ function CurrencyExchange({ onExchangeComplete, onClose }) {
       setConvertedAmount(0);
     }
   }, [amount, exchangeRate, toCurrency]);
-
-  const loadBalances = async () => {
-    try {
-      const response = await getAllBalances();
-      const balanceMap = {};
-      if (response.data.balances) {
-        response.data.balances.forEach(b => {
-          balanceMap[b.currency.toLowerCase()] = b.amount;
-        });
-      }
-      setBalances(balanceMap);
-    } catch (error) {
-      console.error('Error loading balances:', error);
-    }
-  };
-
-  const loadExchangeRate = async () => {
-    try {
-      const response = await getExchangeRates(fromCurrency);
-      console.log('Exchange rate response:', response.data);
-      setExchangeRate(response.data);
-    } catch (error) {
-      console.error('Error loading exchange rate:', error);
-      setError('Failed to load exchange rates');
-    }
-  };
 
   const handleExchange = async () => {
     if (!amount || parseFloat(amount) <= 0) {
