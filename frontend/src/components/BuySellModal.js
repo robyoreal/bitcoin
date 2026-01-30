@@ -54,8 +54,9 @@ function BuySellModal({ crypto, onTradeComplete, onClose }) {
     if (!crypto?.id) return;
     try {
       const response = await getCryptoPrice(crypto.id, currency);
-      if (response.data.price) {
-        setCryptoPrice(response.data.price);
+      // Backend returns { success: true, data: { price: ... } }
+      if (response.data.data?.price) {
+        setCryptoPrice(response.data.data.price);
       }
     } catch (error) {
       console.error('Error loading crypto price:', error);
@@ -135,6 +136,7 @@ function BuySellModal({ crypto, onTradeComplete, onClose }) {
       chf: 'CHF',
       cny: '¥',
       inr: '₹',
+      idr: 'Rp',
       sgd: 'S$'
     };
     return symbols[curr.toLowerCase()] || curr.toUpperCase();
