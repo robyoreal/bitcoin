@@ -4,15 +4,13 @@ import {
   getPortfolio,
   getStats,
   getTransactionHistory,
-  buyCrypto,
-  sellCrypto,
-  topUpBalance,
   getAllBalances,
   getExchangeRates,
 } from '../services/api';
-import CurrencySelector from '../components/CurrencySelector';
 import MultiCurrencyBalances from '../components/MultiCurrencyBalances';
 import CurrencyExchange from '../components/CurrencyExchange';
+import TopUpModal from '../components/TopUpModal';
+import BuySellModal from '../components/BuySellModal';
 import PriceGraph from '../components/PriceGraph';
 import { formatCurrency as formatCurrencyUtil, formatPercentage } from '../utils/currencyFormatter';
 import './Dashboard.css';
@@ -27,11 +25,9 @@ function Dashboard({ onLogout }) {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('market');
   const [selectedCrypto, setSelectedCrypto] = useState(null);
-  const [tradeAmount, setTradeAmount] = useState('');
-  const [topUpAmount, setTopUpAmount] = useState('');
-  const [topUpCurrency, setTopUpCurrency] = useState('usd');
-  const [tradeCurrency, setTradeCurrency] = useState('usd');
   const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [showTopUpModal, setShowTopUpModal] = useState(false);
+  const [showBuySellModal, setShowBuySellModal] = useState(false);
   const [message, setMessage] = useState('');
   const [exchangeRates, setExchangeRates] = useState(null);
 
@@ -72,72 +68,22 @@ function Dashboard({ onLogout }) {
     loadData();
   }, [loadData]);
 
-  const handleTopUp = async () => {
-    const amount = parseFloat(topUpAmount);
-    if (!amount || amount <= 0) {
-      showMessage('Please enter a valid amount', 'error');
-      return;
-    }
-
-    try {
-      const response = await topUpBalance(amount, topUpCurrency);
-      showMessage(response.data.message);
-      setTopUpAmount('');
-      loadData();
-    } catch (error) {
-      showMessage(error.response?.data?.error || 'Failed to top up', 'error');
-    }
+  const openBuySellModal = (crypto, mode = 'buy') => {
+    setSelectedCrypto({ ...crypto, initialMode: mode });
+    setShowBuySellModal(true);
   };
 
-  const handleBuy = async () => {
-    if (!selectedCrypto || !tradeAmount) {
-      showMessage('Please select crypto and enter amount', 'error');
-      return;
-    }
-
-    const amount = parseFloat(tradeAmount);
-    if (amount <= 0) {
-      showMessage('Please enter a valid amount', 'error');
-      return;
-    }
-
-    try {
-      const response = await buyCrypto(
-        selectedCrypto.id,
-        selectedCrypto.symbol,
-        selectedCrypto.name,
-        amount,
-        tradeCurrency
-      );
-      showMessage(response.data.message);
-      setTradeAmount('');
-      setSelectedCrypto(null);
-      loadData();
-    } catch (error) {
-      showMessage(error.response?.data?.error || 'Failed to buy', 'error');
-    }
-  };
-
-  const handleSell = async (holding) => {
-    const amount = parseFloat(prompt(`How much ${holding.symbol} do you want to sell? (Max: ${holding.amount})`));
-
-    if (!amount || amount <= 0) {
-      showMessage('Invalid amount', 'error');
-      return;
-    }
-
-    if (amount > holding.amount) {
-      showMessage('Insufficient holdings', 'error');
-      return;
-    }
-
-    try {
-      const response = await sellCrypto(holding.coin_id, holding.symbol, amount, holding.currency || 'usd');
-      showMessage(response.data.message);
-      loadData();
-    } catch (error) {
-      showMessage(error.response?.data?.error || 'Failed to sell', 'error');
-    }
+  const handleSellFromPortfolio = (holding) => {
+    // Convert holding to crypto format for the modal
+    const crypto = {
+      id: holding.coin_id,
+      name: holding.name,
+      symbol: holding.symbol,
+      current_price: holding.average_buy_price,
+      initialMode: 'sell'
+    };
+    setSelectedCrypto(crypto);
+    setShowBuySellModal(true);
   };
 
   const formatCurrency = (value, currency = 'usd') => {
@@ -206,36 +152,18 @@ function Dashboard({ onLogout }) {
       <MultiCurrencyBalances balances={balances} stats={stats} />
 
       <div className="actions-section">
-        <div className="top-up-section-wrapper">
-          <h3 className="section-title">Top Up Balance</h3>
-          <div className="top-up-controls">
-            <div className="form-group">
-              <CurrencySelector value={topUpCurrency} onChange={setTopUpCurrency} label="Currency" />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Amount to add:</label>
-              <input
-                type="number"
-                placeholder="Enter amount"
-                value={topUpAmount}
-                onChange={(e) => setTopUpAmount(e.target.value)}
-                className="input-field"
-              />
-            </div>
-            <button onClick={handleTopUp} className="btn-primary btn-topup">
-              Top Up
-            </button>
-          </div>
-        </div>
-
-        <div className="exchange-section-wrapper">
-          <button
-            onClick={() => setShowExchangeModal(true)}
-            className="btn-primary btn-exchange"
-          >
-            💱 Currency Exchange (Forex)
-          </button>
-        </div>
+        <button
+          onClick={() => setShowTopUpModal(true)}
+          className="btn-primary btn-action"
+        >
+          💰 Top Up Balance
+        </button>
+        <button
+          onClick={() => setShowExchangeModal(true)}
+          className="btn-primary btn-action"
+        >
+          💱 Currency Exchange
+        </button>
       </div>
 
       <div className="tabs">
@@ -325,10 +253,10 @@ function Dashboard({ onLogout }) {
                     <td>{formatCurrency(crypto.market_cap, crypto.currency || 'usd')}</td>
                     <td>
                       <button
-                        onClick={() => setSelectedCrypto(crypto)}
+                        onClick={() => openBuySellModal(crypto)}
                         className="btn-small btn-primary"
                       >
-                        Buy
+                        Buy/Sell
                       </button>
                     </td>
                   </tr>
@@ -449,6 +377,30 @@ function Dashboard({ onLogout }) {
             loadData();
           }}
           onClose={() => setShowExchangeModal(false)}
+        />
+      )}
+
+      {showTopUpModal && (
+        <TopUpModal
+          onTopUpComplete={(data) => {
+            showMessage(data.message || 'Balance topped up successfully!');
+            loadData();
+          }}
+          onClose={() => setShowTopUpModal(false)}
+        />
+      )}
+
+      {showBuySellModal && selectedCrypto && (
+        <BuySellModal
+          crypto={selectedCrypto}
+          onTradeComplete={(data) => {
+            showMessage(data.message || 'Trade completed successfully!');
+            loadData();
+          }}
+          onClose={() => {
+            setShowBuySellModal(false);
+            setSelectedCrypto(null);
+          }}
         />
       )}
     </div>
