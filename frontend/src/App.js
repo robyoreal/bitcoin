@@ -25,7 +25,7 @@ function App() {
   };
 
   return (
-    <Router>
+    <Router basename="/bitcoin2">
       <Routes>
         <Route
           path="/login"

@@ -32,6 +32,9 @@ export const getCryptoPrice = (coinId, currency = 'usd') =>
 export const searchCrypto = (query) =>
   api.get('/crypto/search', { params: { q: query } });
 
+export const getHistoricalPrices = (coinId, days = 7, currency = 'usd') =>
+  api.get(`/crypto/historical/${coinId}`, { params: { days, currency } });
+
 // Currency
 export const getSupportedCurrencies = () =>
   api.get('/currency/supported');

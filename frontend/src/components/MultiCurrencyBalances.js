@@ -1,18 +1,8 @@
 import React from 'react';
 import './MultiCurrencyBalances.css';
-
-const CURRENCY_SYMBOLS = {
-  usd: '$', eur: '€', gbp: '£', jpy: '¥', aud: 'A$', cad: 'C$',
-  chf: 'CHF', cny: '¥', inr: '₹', brl: 'R$', krw: '₩', mxn: 'MX$',
-  rub: '₽', zar: 'R', try: '₺', sgd: 'S$', hkd: 'HK$', nzd: 'NZ$',
-  sek: 'kr', nok: 'kr'
-};
+import { formatCurrency } from '../utils/currencyFormatter';
 
 function MultiCurrencyBalances({ balances, stats, onCurrencySelect }) {
-  const formatCurrency = (amount, currency) => {
-    const symbol = CURRENCY_SYMBOLS[currency.toLowerCase()] || '';
-    return `${symbol}${amount.toFixed(2)}`;
-  };
 
   if (!balances || balances.length === 0) {
     return (
